@@ -1,0 +1,9 @@
+{
+    "dependencies": {
+        "mkdirp": "latest"
+    },
+    "author": {
+        "name": "Dustin Harris",
+        "email": "dmhzmxn@gmail.com"
+    }
+}
