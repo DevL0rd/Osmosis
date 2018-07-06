@@ -14,7 +14,7 @@ function renderFrame(canvas, context) {
     canvasTranslation = context.translation;
     context.strokeStyle = "red";
     context.strokeRect(0, 0, world.width, world.height);
-    renderCells(world.cells, context)
+    renderCells(world.cells, context);
     //render forground player cells
     this.QueueFrame();
 }

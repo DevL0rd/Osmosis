@@ -3,21 +3,22 @@
 
 var world = {
     cells: {},
+    travelSpeed: 50,
+    speedDecreaseScalar: 0.2,
     globalFriction: 0.5,
     radiusScalar: 0.3,
     massDecay: 0.01,
-    minMass: 10,
+    minMass: 20,
     playerSpawnSize: 50,
-    minSpeedScalar: 0.99,
     forceCutOff: 0.05,
-    width: 500,
-    height: 500,
+    width: 5000,
+    height: 5000,
     foodCount: 0,
-    maxFoodCount: 25,
+    maxFoodCount: 1000,
     foodSpawnSpeed: 1000,
-    foodSpawnAmount: 5,
+    foodSpawnAmount: 25,
     minFoodSize: 3,
-    maxFoodSize: 10
+    maxFoodSize: 7
 }
 var players = {};
 var then = Date.now();
@@ -31,21 +32,27 @@ function loopStart() {
 
 function loopEnd() {
     then = now;
+    elapsedTime = Date.now() - then;
+    return elapsedTime;
 }
-
-function updateWorld() {
+function updateCells() {
     for (i in world.cells) {
         var cell = world.cells[i];
-        updateforce(cell);
-        updatePosition(cell);
         //Server side only
-        if (cell.type == "player") {
-            updateMass(cell);
-        }
+        updateCell(cell);
     }
     resolveCollisions();
 }
-
+function updateCell(cell) {
+    applyGlobalFriction(cell);
+    if (cell.type == "player") {
+        updateMass(cell);
+        //set the forces on the cell to keep it moving;
+        setForce(cell, cell.angle, cell.speed);
+    }
+    applyForceCutoff(cell);
+    updatePosition(cell);
+}
 function foodTick() {
     var spawnCount = world.foodSpawnAmount;
     while (spawnCount > 0 && world.foodCount < world.maxFoodCount) {
@@ -63,41 +70,25 @@ function spawnRandomFoodCell() {
 
 setInterval(foodTick, world.foodSpawnSpeed);
 
-function updateforce(cell) {
+function applyGlobalFriction(cell) {
     cell.force.x -= (cell.force.x * world.globalFriction) * delta;
     cell.force.y -= (cell.force.y * world.globalFriction) * delta;
-    if (cell.force.x < world.forceCutOff && cell.force.x > -world.forceCutOff) cell.force.x = 0;
-    if (cell.force.y < world.forceCutOff && cell.force.y > -world.forceCutOff) cell.force.y = 0;
-    if (cell.type == "player") {
-        var fv = getForceVector(cell.angle, cell.speed);
-        cell.force.x = fv.x;
-        cell.force.y = fv.y;
-    }
 }
-
 function updatePosition(cell) {
     if (cell.force.x == 0 && cell.force.y == 0) return false;
     cell.position.x += cell.force.x * delta;
     cell.position.y += cell.force.y * delta;
 }
-
+function applyForceCutoff(cell) {
+    if (cell.force.x < world.forceCutOff && cell.force.x > -world.forceCutOff) cell.force.x = 0;
+    if (cell.force.y < world.forceCutOff && cell.force.y > -world.forceCutOff) cell.force.y = 0;
+}
 function updateMass(cell) {
     if (cell.mass != world.minMass) {
         var newMass = cell.mass - (cell.mass * world.massDecay) * delta;
         if (newMass < world.minMass) newMass = world.minMass;
-        changeMass(cell, newMass);
+        setMass(cell, newMass);
     }
-}
-
-function addMass(cell, mass) {
-    changeMass(cell, cell.mass + mass);
-}
-
-function changeMass(cell, mass) {
-    cell.mass = mass;
-    cell.radius = cell.mass * world.radiusScalar;
-    //TODO fix
-    cell.speed = 100 - (mass * 0.1);
 }
 
 function resolveCollisions() {
@@ -111,16 +102,20 @@ function resolveCollisions() {
     })
 }
 
+function isMoving(cell) {
+    return (cell.force.x != 0 || cell.force.y != 0);
+}
+
 function getCollidingCells() {
     var collidingCells = [];
     var keys = Object.keys(world.cells);
     for (iA in keys) {
-        var cellA = world.cells[keys[iA]]
+        var cellA = world.cells[keys[iA]];
         //check against all cells
         for (iB in keys) {
             var cellB = world.cells[keys[iB]];
             //compare only moving cells, and uncompared cells.
-            if (iB > iA && (cellA.force.x != 0 || cellA.force.y != 0 || cellB.force.x != 0 || cellB.force.y != 0)) {
+            if (iB > iA && (isMoving(cellA) || isMoving(cellB))) {
                 var collidingCellPair = detectCellToCellCollision(cellA, cellB);
                 if (collidingCellPair) {
                     collidingCells.push(collidingCellPair);
@@ -135,8 +130,7 @@ function getCellsCollidingWithWall() {
     var collidingCells = [];
     for (i in world.cells) {
         var cell = world.cells[i];
-        //get only moving cells
-        if (cell.force.x != 0 || cell.force.y != 0) {
+        if (isMoving(cell)) {
             var cellCollision = detectCellToWallCollision(cell);
             if (cellCollision) {
                 collidingCells.push(cellCollision);
@@ -187,13 +181,13 @@ function detectCellToWallCollision(cell) {
 function handleCellToCellCollision(cellPair) {
     if (cellPair.cellA.mass > cellPair.cellB.mass && cellPair.cellA.type == "player") {
         //if cell is halfway over the target cell.
-        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) >= cellPair.cellA.radius) {
+        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= cellPair.cellA.radius) {
             addMass(cellPair.cellA, cellPair.cellB.mass);
             removeCell(cellPair.cellB);
         }
     } else if (cellPair.cellB.type == "player") {
         //if cell is halfway over the target cell.
-        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) >= cellPair.cellB.radius) {
+        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= cellPair.cellB.radius) {
             addMass(cellPair.cellB, cellPair.cellA.mass);
             removeCell(cellPair.cellA);
         }
@@ -223,7 +217,7 @@ function addCell(x, y, mass, type = "food", playerId) {
     nCell.graphics = {
         color: "rgb(0,255,255)"
     };
-    changeMass(nCell, mass);
+    setMass(nCell, mass);
     nCell.id = generateId();
     if (playerId) {
         nCell.playerId = playerId;
@@ -252,33 +246,33 @@ function removeCell(cell) {
     }
     delete world.cells[cell.id];
 }
+
 function splitCells(cells) {
     for (i in cells) {
         var cell = cells[i];
         splitCell(cell);
     }
 }
+
 function splitCell(cell) {
     var newCellMass = cell.mass / 2;
     if (newCellMass >= world.minMass) {
-        changeMass(cell, newCellMass);
+        setMass(cell, newCellMass);
         var spawnPos = findNewPoint(cell.position, cell.angle, (cell.radius * 2) + 5);
         var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, "player", cell.playerId);
         nCell.angle = cell.angle;
-        var fv = getForceVector(nCell.angle, cell.speed + 50);
-        nCell.force.x += fv.x;
-        nCell.force.y += fv.y;
+        setForce(nCell, nCell.angle, cell.speed + 50);
         nCell.graphics.color = "purple";
     }
 }
 
 function removePlayer(playerId) {
-    var pCells = getAllPlayerCells(socket.playerId);
+    var pCells = getAllPlayerCells(playerId);
     for (i in pCells) {
-        var cell = world.cells[i];
+        var cell = pCells[i];
         removeCell(cell);
     }
-    delete players[socket.playerId];
+    delete players[playerId];
 }
 
 function playerOnMouseMove(playerId, mousePos) {
@@ -299,7 +293,6 @@ function playerOnSplit(playerId) {
 function sendPlayersCells(playerId) {
     players[playerId].socket.emit("getPlayersCellIds", players[playerId].cells);
 }
-
 function sendPlayerFocusedCell(playerId) {
     players[playerId].socket.emit("getFocusedCellId", players[playerId].focusedCellId);
 }
@@ -310,23 +303,29 @@ function spawnPlayer(socket) {
     var playerCell = addCell(spawnPos.x, spawnPos.y, world.playerSpawnSize, "player", socket.playerId);
     players[socket.playerId].socket = socket;
     players[socket.playerId].focusedCellId = playerCell.id;
+    sendPlayerFocusedCell(playerCell.playerId);
+    sendPlayersCells(playerCell.playerId);
     return playerCell;
 }
 
 function init(plugins, settings, events, io, log, commands) {
-    setInterval(function () {
+    function gameLoop() {
         loopStart();
-        updateWorld();
+        updateCells();
         //send updates to client
         io.emit("worldUpdate", world);
-        loopEnd();
-    }, 40)
+        var elapsedTime = loopEnd();
+        console.log(elapsedTime);
+        setTimeout(gameLoop, 40);
+    }
+    gameLoop();
     events.on("connection", function (socket) {
         socket.emit("worldData", world);
+
         var playerCell = spawnPlayer(socket);
-        sendPlayerFocusedCell(playerCell.playerId);
-        sendPlayersCells(playerCell.playerId);
+
         socket.on("disconnect", function () {
+            //make sure user is playing
             if (socket.playerId) {
                 removePlayer(socket.playerId);
             }
@@ -337,7 +336,7 @@ function init(plugins, settings, events, io, log, commands) {
                 playerOnMouseMove(socket.playerId, mousePos);
             }
         });
-        socket.on("spaceDown", function () {
+        socket.on("split", function () {
             //make sure user is playing
             if (socket.playerId) {
                 playerOnSplit(socket.playerId);
@@ -345,15 +344,30 @@ function init(plugins, settings, events, io, log, commands) {
         });
     });
 }
+function testCellCollision(testCell) {
 
-function getRandomSpawn(size) {
-    var rX = getRandomInt(size, world.width - size);
-    var rY = getRandomInt(size, world.height - size);
-    return {
-        x: rX,
-        y: rY
-    };
-    //TODO prevent spawning inside of something.
+    for (i in world.cells) {
+        var cell = world.cells[i];
+        var collidingCellPair = detectCellToCellCollision(testCell, cell);
+        if (collidingCellPair) {
+            return true;
+        }
+    }
+    return false
+}
+
+function getRandomSpawn(radius) {
+    while (true) {
+        var rX = getRandomInt(radius, world.width - radius);
+        var rY = getRandomInt(radius, world.height - radius);
+        var testCell = { position: { x: rX, y: rY }, radius: radius };
+        if (!testCellCollision(testCell)) {
+            return {
+                x: rX,
+                y: rY
+            };
+        };
+    }
 }
 
 function getAllPlayerCells(playerId) {
@@ -414,10 +428,42 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function setForceVector(cell, forceVector) {
+    cell.force.x = forceVector.x;
+    cell.force.y = forceVector.y;
+}
+
+function addForceVector(cell, forceVector) {
+    cell.force.x += forceVector.x;
+    cell.force.y += forceVector.y;
+}
+
+function setForce(cell, angle, speed) {
+    var fv = getForceVector(angle, speed);
+    setForceVector(cell, fv);
+}
+
+function addForce(cell, angle, speed) {
+    var fv = getForceVector(angle, speed);
+    addForceVector(cell, fv);
+}
+
+function addMass(cell, mass) {
+    setMass(cell, cell.mass + mass);
+}
+
+function setMass(cell, mass) {
+    cell.mass = mass;
+    cell.radius = cell.mass * world.radiusScalar;
+    //TODO fix
+    cell.speed = (world.travelSpeed / (mass * world.speedDecreaseScalar)) * world.travelSpeed;
+}
+
 function generateId() {
     var timestamp = (new Date().getTime() / 1000 | 0).toString(16);
     return timestamp + 'xxxxxxxxxxxxxxxx'.replace(/[x]/g, function () {
         return (Math.random() * 16 | 0).toString(16);
     }).toLowerCase();
 }
+
 module.exports.init = init
