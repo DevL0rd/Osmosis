@@ -244,9 +244,9 @@ function removeCell(cell) {
         if (players[cell.playerId] && players[cell.playerId].cells[cell.id]) {
             var playerCells = getAllPlayerCells(cell.playerId);
             var largestCell = getLargestCell(playerCells);
-            var socket = players[cell.playerId].socket;
-            socket.focusedCellId = largestCell.id;
-            socket.emit("getFocusedCellId", largestCell.id);
+            players[cell.playerId].focusedCellId = largestCell.id;
+            sendPlayersCells(cell.playerId);
+            sendPlayerFocusedCell(cell.playerId);
             delete players[cell.playerId].cells[cell.id];
         }
     }
@@ -270,6 +270,80 @@ function splitCell(cell) {
         nCell.force.y += fv.y;
         nCell.graphics.color = "purple";
     }
+}
+
+function removePlayer(playerId) {
+    var pCells = getAllPlayerCells(socket.playerId);
+    for (i in pCells) {
+        var cell = world.cells[i];
+        removeCell(cell);
+    }
+    delete players[socket.playerId];
+}
+
+function playerOnMouseMove(playerId, mousePos) {
+    var pCells = getAllPlayerCells(playerId);
+    for (i in pCells) {
+        var cell = pCells[i];
+        //set the angle of each cell to follow the mouse
+        cell.angle = getAngle(cell.position, mousePos);
+    }
+}
+
+function playerOnSplit(playerId) {
+    var pCells = getAllPlayerCells(playerId);
+    //split all of players cells
+    splitCells(pCells);
+}
+
+function sendPlayersCells(playerId) {
+    players[playerId].socket.emit("getPlayersCellIds", players[playerId].cells);
+}
+
+function sendPlayerFocusedCell(playerId) {
+    players[playerId].socket.emit("getFocusedCellId", players[playerId].focusedCellId);
+}
+
+function spawnPlayer(socket) {
+    var spawnPos = getRandomSpawn(50);
+    socket.playerId = generateId();
+    var playerCell = addCell(spawnPos.x, spawnPos.y, world.playerSpawnSize, "player", socket.playerId);
+    players[socket.playerId].socket = socket;
+    players[socket.playerId].focusedCellId = playerCell.id;
+    return playerCell;
+}
+
+function init(plugins, settings, events, io, log, commands) {
+    setInterval(function () {
+        loopStart();
+        updateWorld();
+        //send updates to client
+        io.emit("worldUpdate", world);
+        loopEnd();
+    }, 40)
+    events.on("connection", function (socket) {
+        socket.emit("worldData", world);
+        var playerCell = spawnPlayer(socket);
+        sendPlayerFocusedCell(playerCell.playerId);
+        sendPlayersCells(playerCell.playerId);
+        socket.on("disconnect", function () {
+            if (socket.playerId) {
+                removePlayer(socket.playerId);
+            }
+        });
+        socket.on("mouseMove", function (mousePos) {
+            //validate input and make sure user is playing
+            if (socket.playerId && mousePos && mousePos.y && mousePos.x) {
+                playerOnMouseMove(socket.playerId, mousePos)
+            }
+        });
+        socket.on("spaceDown", function () {
+            //make sure user is playing
+            if (socket.playerId) {
+                playerOnSplit(socket.playerId);
+            }
+        });
+    });
 }
 
 function getRandomSpawn(size) {
@@ -345,55 +419,5 @@ function generateId() {
     return timestamp + 'xxxxxxxxxxxxxxxx'.replace(/[x]/g, function () {
         return (Math.random() * 16 | 0).toString(16);
     }).toLowerCase();
-}
-
-function init(plugins, settings, events, io, log, commands) {
-    setInterval(function () {
-        loopStart();
-        updateWorld();
-        //send updates to client
-        io.emit("worldUpdate", world);
-        loopEnd();
-    }, 40)
-    events.on("connection", function (socket) {
-        socket.emit("worldData", world);
-        var spawnPos = getRandomSpawn(50);
-        socket.playerId = generateId();
-        var playerCell = addCell(spawnPos.x, spawnPos.y, world.playerSpawnSize, "player", socket.playerId);
-        socket.focusedCellId = playerCell.id;
-        socket.emit("getFocusedCellId", socket.focusedCellId);
-        players[socket.playerId].socket = socket;
-        socket.emit("getPlayersCellIds", players[socket.playerId].cells);
-        socket.on("disconnect", function () {
-            if (socket.playerId && players[socket.playerId]) {
-                for (i in players[socket.playerId].cells) {
-                    if (world.cells[i]) {
-                        var cell = world.cells[i];
-                        removeCell(cell);
-                    }
-                }
-                delete players[socket.playerId];
-            }
-        });
-        socket.on("mouseMove", function (mousePos) {
-            //validate input and make sure user is playing
-            if (socket.playerId && mousePos && mousePos.y && mousePos.x) {
-                var pCells = getAllPlayerCells(socket.playerId);
-                for (i in pCells) {
-                    var cell = pCells[i];
-                    //set the angle of each cell to follow the mouse
-                    cell.angle = getAngle(cell.position, mousePos);
-                }
-            }
-        });
-        socket.on("spaceDown", function () {
-            //make sure user is playing
-            if (socket.playerId) {
-                var pCells = getAllPlayerCells(socket.playerId);
-                //split all of players cells
-                splitCells(pCells);
-            }
-        });
-    });
 }
 module.exports.init = init
