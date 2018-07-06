@@ -14,39 +14,11 @@ function renderFrame(canvas, context) {
     canvasTranslation = context.translation;
     context.strokeStyle = "red";
     context.strokeRect(0, 0, world.width, world.height);
-    var remainingCells = renderFoodCells(world.cells, context);
-    remainingCells = renderPlayerCells(remainingCells, context);
-    renderCells(remainingCells, context);
-
+    renderCells(world.cells, context)
     //render forground player cells
     this.QueueFrame();
 }
-function renderFoodCells(cells, context) {
-    var remainingCells = [];
-    //render food cells
-    for (i in cells) {
-        var cell = cells[i];
-        if (cell.type == "food") {
-            renderCell(cell, context);
-        } else {
-            remainingCells.push(cell);
-        }
-    }
-    return remainingCells;
-}
-function renderPlayerCells(cells, context) {
-    var remainingCells = [];
-    //render player cells
-    for (i in cells) {
-        var cell = cells[i];
-        if (!playersCells[cell.id] && cell.type == "player") {
-            renderCell(cell, context);
-        } else {
-            remainingCells.push(cell);
-        }
-    }
-    return remainingCells;
-}
+
 function renderCells(cells, context) {
     for (i in cells) {
         var cell = cells[i];

@@ -334,7 +334,7 @@ function init(plugins, settings, events, io, log, commands) {
         socket.on("mouseMove", function (mousePos) {
             //validate input and make sure user is playing
             if (socket.playerId && mousePos && mousePos.y && mousePos.x) {
-                playerOnMouseMove(socket.playerId, mousePos)
+                playerOnMouseMove(socket.playerId, mousePos);
             }
         });
         socket.on("spaceDown", function () {
