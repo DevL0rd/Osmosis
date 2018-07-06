@@ -113,18 +113,17 @@ function resolveCollisions() {
 
 function getCollidingCells() {
     var collidingCells = [];
-    for (iA in world.cells) {
-        var cellA = world.cells[iA]
-        //get only moving cells
-        if (cellA.force.x != 0 || cellA.force.y != 0) {
-            //check against all cells
-            for (iB in world.cells) {
-                var cellB = world.cells[iB];
-                if (cellA != cellB) {
-                    var collidingCellPair = detectCellToCellCollision(cellA, cellB);
-                    if (collidingCellPair) {
-                        collidingCells.push(collidingCellPair);
-                    }
+    var keys = Object.keys(world.cells);
+    for (iA in keys) {
+        var cellA = world.cells[keys[iA]]
+        //check against all cells
+        for (iB in keys) {
+            var cellB = world.cells[keys[iB]];
+            //compare only moving cells, and uncompared cells.
+            if (iB > iA && (cellA.force.x != 0 || cellA.force.y != 0 || cellB.force.x != 0 || cellB.force.y != 0)) {
+                var collidingCellPair = detectCellToCellCollision(cellA, cellB);
+                if (collidingCellPair) {
+                    collidingCells.push(collidingCellPair);
                 }
             }
         }
