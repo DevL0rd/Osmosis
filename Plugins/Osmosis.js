@@ -15,9 +15,9 @@ var world = {
     width: 5000,
     height: 5000,
     foodCount: 0,
-    maxFoodCount: 1000,
+    maxFoodCount: 5000,
     foodSpawnSpeed: 1000,
-    foodSpawnAmount: 25,
+    foodSpawnAmount: 50,
     minFoodSize: 3,
     maxFoodSize: 7
 }
@@ -109,19 +109,24 @@ function isMoving(cell) {
 
 function getCollidingCells() {
     var collidingCells = [];
+    var checkedCells = {};
     var keys = Object.keys(world.cells);
     for (iA in keys) {
         var cellA = world.cells[keys[iA]];
-        //check against all cells
-        for (iB in keys) {
-            var cellB = world.cells[keys[iB]];
-            //compare only moving cells, and uncompared cells.
-            if (iB > iA && (isMoving(cellA) || isMoving(cellB))) {
-                var collidingCellPair = detectCellToCellCollision(cellA, cellB);
-                if (collidingCellPair) {
-                    collidingCells.push(collidingCellPair);
+        //Check moving cells
+        if (isMoving(cellA)) {
+            //Against all cells
+            for (iB in keys) {
+                var cellB = world.cells[keys[iB]];
+                //compare non matching cells, and exclude already checked cells
+                if (keys[iA] != keys[iB] && !checkedCells[keys[iB]]) {
+                    var collidingCellPair = detectCellToCellCollision(cellA, cellB);
+                    if (collidingCellPair) {
+                        collidingCells.push(collidingCellPair);
+                    }
                 }
             }
+            checkedCells[keys[iA]] = true; //flagAsChecked
         }
     }
     return collidingCells;
@@ -316,8 +321,9 @@ function init(plugins, settings, events, io, log, commands) {
         //send updates to client
         io.emit("worldUpdate", world);
         var elapsedTime = loopEnd();
-        console.log(elapsedTime);
-        setTimeout(gameLoop, 40);
+        var loopTime = 40 - elapsedTime;
+        if (loopTime < 0) loopTime = 0;
+        setTimeout(gameLoop, loopTime);
     }
     gameLoop();
     events.on("connection", function (socket) {
