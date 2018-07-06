@@ -332,7 +332,9 @@ function getDistance(pos1, pos2) {
     var b = pos1.y - pos2.y;
     return Math.sqrt(a * a + b * b);
 }
-
+function getAngle(pos1, pos2) {
+    return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x) * 180 / Math.PI;
+}
 function findNewPoint(x, y, angle, distance) {
     var result = {};
     result.x = Math.round(Math.cos(angle * Math.PI / 180) * distance + x);
@@ -372,13 +374,12 @@ function init(plugins, settings, events, io, log, commands) {
                 delete players[socket.playerId];
             }
         });
-        socket.on("mouseMove", function (mouse) {
-            if (socket.playerId && players[socket.playerId]) {
-                for (i in players[socket.playerId].cells) {
-                    if (world.cells[i]) {
-                        var cell = world.cells[i];
-                        cell.angle = mouse.angle;
-                    }
+        socket.on("mouseMove", function (mousePos) {
+            if (socket.playerId) {
+                var pCells = getAllPlayerCells(socket.playerId);
+                for (i in pCells) {
+                    var cell = pCells[i];
+                    cell.angle = getAngle(cell.position, mousePos);
                 }
             }
         });

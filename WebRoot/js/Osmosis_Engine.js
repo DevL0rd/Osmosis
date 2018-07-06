@@ -137,13 +137,17 @@ function getAngle(pos1, pos2) {
 window.onmousemove = trackMouseMove;
 function trackMouseMove(event) {
     mousePos = {
-        x: event.clientX,
-        y: event.clientY
+        x: event.clientX - canvasTranslation.x,
+        y: event.clientY - canvasTranslation.y
     };
-    if (isPlaying && focusedCellId && world.cells[focusedCellId]) {
-        socket.emit("mouseMove", { angle: getAngle({ x: window.innerWidth / 2, y: window.innerHeight / 2 }, mousePos) });
-    }
+
 }
+setInterval(function () {
+    if (isPlaying && mousePos && focusedCellId && world.cells[focusedCellId]) {
+        socket.emit("mouseMove", mousePos);
+        delete mousePos;
+    }
+}, 40);
 window.onkeydown = keyDown;
 window.onkeyup = keyUp;
 var pressedKeys = {};
