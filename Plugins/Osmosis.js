@@ -19,62 +19,49 @@ var world = {
     minFoodSize: 3,
     maxFoodSize: 10
 }
-
 var players = {};
-function generateId() {
-    var timestamp = (new Date().getTime() / 1000 | 0).toString(16);
-    return timestamp + 'xxxxxxxxxxxxxxxx'.replace(/[x]/g, function () {
-        return (Math.random() * 16 | 0).toString(16);
-    }).toLowerCase();
+var then = Date.now();
+var now = Date.now();
+var delta = (now - then) / 1000;
+
+function loopStart() {
+    now = Date.now();
+    delta = (now - then) / 1000;
 }
 
-function newCell(x, y, mass, type = "food", playerId) {
-    var nCell = {};
-    nCell.type = type;
-    nCell.position = {
-        x: x,
-        y: y
-    }
-    nCell.lastPosition = Object.assign(nCell.position, {});
-    nCell.force = {
-        x: 0,
-        y: 0
-    }
-    nCell.angle = 0;
-    nCell.graphics = {
-        color: "rgb(0,255,255)"
-    };
-    changeMass(nCell, mass);
-    nCell.id = generateId();
-    world.cells[nCell.id] = nCell;
-    if (playerId) {
-        nCell.playerId = playerId;
-        if (!players[playerId]) {
-            players[playerId] = { cells: {} };
+function loopEnd() {
+    then = now;
+}
+
+function updateWorld() {
+    for (i in world.cells) {
+        var cell = world.cells[i];
+        updateforce(cell);
+        updatePosition(cell);
+        //Server side only
+        if (cell.type == "player") {
+            updateMass(cell);
         }
-        //addplayer cell to list
-        players[playerId].cells[nCell.id] = true;
     }
-    return nCell;
+    resolveCollisions();
 }
 
-function updatePosition(cell) {
-    if (cell.force.x == 0 && cell.force.y == 0) return false;
-    cell.lastPosition = Object.assign(cell.position, {});
-    cell.position.x += cell.force.x * delta;
-    cell.position.y += cell.force.y * delta;
+function foodTick() {
+    var spawnCount = world.foodSpawnAmount;
+    while (spawnCount > 0 && world.foodCount < world.maxFoodCount) {
+        spawnRandomFoodCell()
+        spawnCount--;
+    }
 }
 
-function getForceVector(angle, velocity) {
-    return {
-        x: velocity * Math.cos(angle * Math.PI / 180),
-        y: velocity * Math.sin(angle * Math.PI / 180)
-    };
+function spawnRandomFoodCell() {
+    var foodSize = getRandomInt(world.minFoodSize, world.maxFoodSize);
+    var spawnPos = getRandomSpawn(foodSize);
+    addCell(spawnPos.x, spawnPos.y, foodSize);
+    world.foodCount++;
 }
 
-function getVelocityOfVector(forceVector) {
-    return Math.sqrt(Math.pow(forceVector.x, 2) + Math.pow(forceVector.y, 2));
-}
+setInterval(foodTick, world.foodSpawnSpeed);
 
 function updateforce(cell) {
     cell.force.x -= (cell.force.x * world.globalFriction) * delta;
@@ -88,6 +75,11 @@ function updateforce(cell) {
     }
 }
 
+function updatePosition(cell) {
+    if (cell.force.x == 0 && cell.force.y == 0) return false;
+    cell.position.x += cell.force.x * delta;
+    cell.position.y += cell.force.y * delta;
+}
 
 function updateMass(cell) {
     if (cell.mass != world.minMass) {
@@ -107,32 +99,16 @@ function changeMass(cell, mass) {
     //TODO fix
     cell.speed = 100 - (mass * 0.1);
 }
-function detectCellToCellCollision(cellA, cellB) {
-    var radiusAdded = cellA.radius + cellB.radius
-    if (getDistanceBetweenCells(cellA, cellB) < radiusAdded) return true;
-    return false;
-}
-function detectCellToWallCollision(cell) {
-    if (cell.position.x < cell.radius || cell.position.x > world.width - cell.radius) {
-        return {
-            cell: cell,
-            axis: "x"
-        };
-    } else if (cell.position.y < cell.radius || cell.position.y > world.height - cell.radius) {
-        return {
-            cell: cell,
-            axis: "y"
-        };
-    }
-}
-function getDistance(pos1, pos2) {
-    var a = pos1.x - pos2.x;
-    var b = pos1.y - pos2.y;
-    return Math.sqrt(a * a + b * b);
-}
 
-function getDistanceBetweenCells(cellA, cellB) {
-    return getDistance(cellA.position, cellB.position);
+function resolveCollisions() {
+    var collidingCells = getCollidingCells();
+    collidingCells.forEach(function (cellPair) {
+        handleCellToCellCollision(cellPair);
+    })
+    var wallCollidingCells = getCellsCollidingWithWall();
+    wallCollidingCells.forEach(function (cellCollisions) {
+        handleCellToWallCollision(cellCollisions);
+    })
 }
 
 function getCollidingCells() {
@@ -145,8 +121,9 @@ function getCollidingCells() {
             for (iB in world.cells) {
                 var cellB = world.cells[iB];
                 if (cellA != cellB) {
-                    if (detectCellToCellCollision(cellA, cellB)) {
-                        collidingCells.push([cellA, cellB]);
+                    var collidingCellPair = detectCellToCellCollision(cellA, cellB);
+                    if (collidingCellPair) {
+                        collidingCells.push(collidingCellPair);
                     }
                 }
             }
@@ -169,29 +146,103 @@ function getCellsCollidingWithWall() {
     }
     return collidingCells;
 }
-function resolveCollisions() {
-    var collidingCells = getCollidingCells();
-    collidingCells.forEach(function (cellPair) {
-        handleCellToCellCollision(cellPair);
-    })
-    var wallCollidingCells = getCellsCollidingWithWall();
-    wallCollidingCells.forEach(function (cellCollision) {
-        handleCellToWallCollision(cellCollision);
-    })
+
+function detectCellToCellCollision(cellA, cellB) {
+    var radiusAdded = cellA.radius + cellB.radius
+    var collisionDepth = getDistanceBetweenCells(cellA, cellB);
+    if (collisionDepth < radiusAdded) return { cellA: cellA, cellB: cellB, collisionDepth: collisionDepth };
+    return false;
+}
+
+function detectCellToWallCollision(cell) {
+    var collisonAxi = [];
+    if (cell.position.x <= cell.radius || cell.position.x >= world.width - cell.radius) {
+        var collisionDepth = 0;
+        if (cell.position.x <= cell.radius) {
+            collisionDepth = cell.position.x - cell.radius;
+        } else {
+            collisionDepth = cell.position.x - world.width + cell.radius;
+        }
+        collisonAxi.push({
+            cell: cell,
+            axis: "x",
+            collisionDepth: collisionDepth
+        });
+    }
+    if (cell.position.y <= cell.radius || cell.position.y >= world.height - cell.radius) {
+        var collisionDepth = 0;
+        if (cell.position.y <= cell.radius) {
+            collisionDepth = cell.position.y - cell.radius;
+        } else {
+            collisionDepth = cell.position.y - world.height + cell.radius;
+        }
+        collisonAxi.push({
+            cell: cell,
+            axis: "y",
+            collisionDepth: collisionDepth
+        });
+    }
+    return collisonAxi;
 }
 
 function handleCellToCellCollision(cellPair) {
-    if (cellPair[0].mass > cellPair[1].mass) {
-        addMass(cellPair[0], cellPair[1].mass);
-        removeCell(cellPair[1]);
+    if (cellPair.cellA.mass > cellPair.cellB.mass) {
+        //if cell is halfway over the target cell.
+        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) >= cellPair.cellB.radius) {
+            addMass(cellPair.cellA, cellPair.cellB.mass);
+            removeCell(cellPair.cellB);
+        }
     } else {
-        addMass(cellPair[1], cellPair[0].mass);
-        removeCell(cellPair[0]);
+        //if cell is halfway over the target cell.
+        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) >= cellPair.cellA.radius) {
+            addMass(cellPair.cellB, cellPair.cellA.mass);
+            removeCell(cellPair.cellA);
+        }
     }
 }
-function handleCellToWallCollision(cellCollision) {
-    //console.log(cellCollision.cell.position[cellCollision.axis] + " - " + cellCollision.cell.lastPosition[cellCollision.axis])
-    cellCollision.cell.position[cellCollision.axis] = cellCollision.cell.lastPosition[cellCollision.axis];
+
+function handleCellToWallCollision(cellCollisions) {
+    for (i in cellCollisions) {
+        var cellCollision = cellCollisions[i];
+        cellCollision.cell.position[cellCollision.axis] -= cellCollision.collisionDepth;
+    }
+}
+
+function generateId() {
+    var timestamp = (new Date().getTime() / 1000 | 0).toString(16);
+    return timestamp + 'xxxxxxxxxxxxxxxx'.replace(/[x]/g, function () {
+        return (Math.random() * 16 | 0).toString(16);
+    }).toLowerCase();
+}
+
+function addCell(x, y, mass, type = "food", playerId) {
+    var nCell = {};
+    nCell.type = type;
+    nCell.position = {
+        x: x,
+        y: y
+    }
+    nCell.lastPosition = Object.assign(nCell.position, {});
+    nCell.force = {
+        x: 0,
+        y: 0
+    }
+    nCell.angle = 0;
+    nCell.graphics = {
+        color: "rgb(0,255,255)"
+    };
+    changeMass(nCell, mass);
+    nCell.id = generateId();
+    if (playerId) {
+        nCell.playerId = playerId;
+        if (!players[playerId]) {
+            players[playerId] = { cells: {} };
+        }
+        //addplayer cell to list
+        players[playerId].cells[nCell.id] = true;
+    }
+    world.cells[nCell.id] = nCell;
+    return nCell;
 }
 
 function removeCell(cell) {
@@ -199,67 +250,117 @@ function removeCell(cell) {
         world.foodCount--;
     } else if (cell.type == "player") {
         if (players[cell.playerId] && players[cell.playerId].cells[cell.id]) {
+            var playerCells = getAllPlayerCells(cell.playerId);
+            var largestCell = getLargestCell(playerCells);
+            var socket = players[cell.playerId].socket;
+            socket.focusedCellId = largestCell.id;
+            socket.emit("getFocusedCellId", largestCell.id);
             delete players[cell.playerId].cells[cell.id];
         }
     }
     delete world.cells[cell.id];
 }
+function splitCells(cells) {
+    for (i in cells) {
+        var cell = cells[i];
+        splitCell(cell);
+    }
+}
+function splitCell(cell) {
+    var newCellMass = cell.mass / 2;
+    if (newCellMass >= world.minMass) {
+        changeMass(cell, newCellMass);
+        var spawnPos = findNewPoint(cell.position.x, cell.position.y, cell.angle, (cell.radius * 2) + 5);
+        var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, "player", cell.playerId);
+        nCell.angle = cell.angle;
+        // var fv = getForceVector(nCell.angle, cell.speed + 50);
+        // nCell.force.x += fv.x;
+        // nCell.force.y += fv.y;
+        nCell.graphics.color = "purple";
+    }
+}
 
-function updateWorld() {
-    for (i in world.cells) {
-        var cell = world.cells[i];
-        updatePosition(cell);
-        updateforce(cell);
-        //Server side only
-        if (cell.type == "player") {
-            updateMass(cell);
+function getRandomSpawn(size) {
+    var rX = getRandomInt(size, world.width - size);
+    var rY = getRandomInt(size, world.height - size);
+    return {
+        x: rX,
+        y: rY
+    };
+    //TODO prevent spawning inside of something.
+}
+
+function getAllPlayerCells(playerId) {
+    var playerCells = [];
+    if (players[playerId]) {
+        for (cId in players[playerId].cells) {
+            playerCells.push(world.cells[cId]);
         }
     }
-    resolveCollisions();
-};
-
-var then = Date.now();
-var now = Date.now();
-var delta = (now - then) / 1000;
-
-function loopStart() {
-    now = Date.now();
-    delta = (now - then) / 1000;
+    return playerCells;
 }
 
-function loopEnd() {
-    then = now;
+function getLargestCell(cells) {
+    var largestCell
+    for (i in cells) {
+        var cell = cells[i];
+        if (!largestCell) largestCell = cell;
+        if (cell.mass > largestCell.mass) {
+            largestCell = cell;
+        }
+    }
+    return largestCell;
 }
+
+function getDistanceBetweenCells(cellA, cellB) {
+    return getDistance(cellA.position, cellB.position);
+}
+
+function getForceVector(angle, velocity) {
+    return {
+        x: velocity * Math.cos(angle * Math.PI / 180),
+        y: velocity * Math.sin(angle * Math.PI / 180)
+    };
+}
+
+function getVelocityOfVector(forceVector) {
+    return Math.sqrt(Math.pow(forceVector.x, 2) + Math.pow(forceVector.y, 2));
+}
+
+function getDistance(pos1, pos2) {
+    var a = pos1.x - pos2.x;
+    var b = pos1.y - pos2.y;
+    return Math.sqrt(a * a + b * b);
+}
+
 function findNewPoint(x, y, angle, distance) {
     var result = {};
     result.x = Math.round(Math.cos(angle * Math.PI / 180) * distance + x);
     result.y = Math.round(Math.sin(angle * Math.PI / 180) * distance + y);
     return result;
 }
-function splitCell(cell) {
-    var newCellMass = cell.mass / 2;
-    if (newCellMass >= world.minMass) {
-        changeMass(cell, newCellMass);
-        //removeCell(cell);
-        var spawnPos = findNewPoint(cell.position.x, cell.position.y, cell.angle, (cell.radius * 2) + 5);
-        var nCell = newCell(spawnPos.x, spawnPos.y, newCellMass, "player", cell.playerId);
-        nCell.angle = cell.angle;
-        // var fv = getForceVector(nCell.angle, cell.speed + 50);
-        // nCell.force.x += fv.x;
-        // nCell.force.y += fv.y;
-        nCell.graphics.color = "purple";
 
-    }
+function getRandomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 function init(plugins, settings, events, io, log, commands) {
+    setInterval(function () {
+        loopStart();
+        updateWorld();
+        //send updates to client
+        io.emit("worldUpdate", world);
+        loopEnd();
+    }, 40)
     events.on("connection", function (socket) {
         socket.emit("worldData", world);
         var spawnPos = getRandomSpawn(50);
         socket.playerId = generateId();
-        var playerCell = newCell(spawnPos.x, spawnPos.y, world.playerSpawnSize, "player", socket.playerId);
+        var playerCell = addCell(spawnPos.x, spawnPos.y, world.playerSpawnSize, "player", socket.playerId);
         socket.focusedCellId = playerCell.id;
         socket.emit("getFocusedCellId", socket.focusedCellId);
+        players[socket.playerId].socket = socket;
+        socket.emit("getPlayersCellIds", players[socket.playerId].cells);
         socket.on("disconnect", function () {
             if (socket.playerId && players[socket.playerId]) {
                 for (i in players[socket.playerId].cells) {
@@ -268,6 +369,7 @@ function init(plugins, settings, events, io, log, commands) {
                         removeCell(cell);
                     }
                 }
+                delete players[socket.playerId];
             }
         });
         socket.on("mouseMove", function (mouse) {
@@ -281,67 +383,11 @@ function init(plugins, settings, events, io, log, commands) {
             }
         });
         socket.on("spaceDown", function () {
-            if (socket.playerId && players[socket.playerId]) {
-                for (i in players[socket.playerId].cells) {
-                    if (world.cells[i]) {
-                        var cell = world.cells[i];
-                        splitCell(cell);
-                    }
-                }
+            if (socket.playerId) {
+                var pCells = getAllPlayerCells(socket.playerId);
+                splitCells(pCells);
             }
         });
-    })
-
-    setInterval(function () {
-        loopStart();
-        updateWorld();
-        //send updates to client
-        io.emit("worldUpdate", world);
-        loopEnd();
-    }, 40)
-    setInterval(function () {
-        var spawnCount = world.foodSpawnAmount;
-        while (spawnCount > 0 && world.foodCount < world.maxFoodCount) {
-            var foodSize = getRandomInt(world.minFoodSize, world.maxFoodSize);
-            var spawnPos = getRandomSpawn(foodSize);
-            newCell(spawnPos.x, spawnPos.y, foodSize);
-            world.foodCount++;
-            spawnCount--;
-        }
-    }, world.foodSpawnSpeed);
-}
-// function getAllPlayerCells(playerId) {
-//     var playerCells = [];
-//     if (players[playerId]) {
-//         for (cId in players[playerId].cells) {
-//             playerCells.push(world.cells[cId]);
-//         }
-//     }
-//     return playerCells;
-// }
-// function getLargestCell(cells) {
-//     var largestCell
-//     for (i in cells) {
-//         var cell = cells[i];
-//         if (!largestCell) largestCell = cell;
-//         if (cell.mass > largestCell.mass) {
-//             largestCell = cell;
-//         }
-//     }
-//     return largestCell;
-// }
-
-function getRandomSpawn(size) {
-    var rX = getRandomInt(size, world.width - size);
-    var rY = getRandomInt(size, world.height - size);
-    return {
-        x: rX,
-        y: rY
-    };
-    //TODO prevent spawning inside of something.
-}
-
-function getRandomInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    });
 }
 module.exports.init = init

@@ -1,5 +1,6 @@
 var world = {};
 var focusedCellId;
+var playersCells = {};
 var isPlaying = true;
 var then = Date.now();
 var now = Date.now();
@@ -43,13 +44,73 @@ function updateforce(cell) {
         cell.force.y = fv.y;
     }
 }
-
+function getCellsCollidingWithWall() {
+    var collidingCells = [];
+    for (i in world.cells) {
+        var cell = world.cells[i];
+        //get only moving cells
+        if (cell.force.x != 0 || cell.force.y != 0) {
+            var cellCollision = detectCellToWallCollision(cell);
+            if (cellCollision) {
+                collidingCells.push(cellCollision);
+            }
+        }
+    }
+    return collidingCells;
+}
+function detectCellToWallCollision(cell) {
+    var collisonAxi = [];
+    if (cell.position.x <= cell.radius || cell.position.x >= world.width - cell.radius) {
+        var collisionDepth = 0;
+        if (cell.position.x <= cell.radius) {
+            collisionDepth = cell.position.x - cell.radius;
+        } else {
+            collisionDepth = cell.position.x - world.width + cell.radius;
+        }
+        collisonAxi.push({
+            cell: cell,
+            axis: "x",
+            collisionDepth: collisionDepth
+        });
+    }
+    if (cell.position.y <= cell.radius || cell.position.y >= world.height - cell.radius) {
+        var collisionDepth = 0;
+        if (cell.position.y <= cell.radius) {
+            collisionDepth = cell.position.y - cell.radius;
+        } else {
+            collisionDepth = cell.position.y - world.height + cell.radius;
+        }
+        collisonAxi.push({
+            cell: cell,
+            axis: "y",
+            collisionDepth: collisionDepth
+        });
+    }
+    return collisonAxi;
+}
+function resolveCollisions() {
+    // var collidingCells = getCollidingCells();
+    // collidingCells.forEach(function (cellPair) {
+    //     handleCellToCellCollision(cellPair);
+    // })
+    var wallCollidingCells = getCellsCollidingWithWall();
+    wallCollidingCells.forEach(function (cellCollisions) {
+        handleCellToWallCollision(cellCollisions);
+    })
+}
+function handleCellToWallCollision(cellCollisions) {
+    for (i in cellCollisions) {
+        var cellCollision = cellCollisions[i];
+        cellCollision.cell.position[cellCollision.axis] -= cellCollision.collisionDepth;
+    }
+}
 function update() {
     for (i in world.cells) {
         var cell = world.cells[i];
         updatePosition(cell);
         updateforce(cell);
     }
+    resolveCollisions();
 };
 socket.on("worldData", function (worldData) {
     world = worldData;
@@ -64,6 +125,9 @@ socket.on("worldUpdate", function (worldData) {
 });
 socket.on("getFocusedCellId", function (cellId) {
     focusedCellId = cellId;
+});
+socket.on("getPlayersCellIds", function (nPlayersCells) {
+    playersCells = nPlayersCells;
 });
 var travelAngle = 0;
 var mousePos;
