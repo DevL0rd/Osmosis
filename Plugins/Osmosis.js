@@ -262,7 +262,7 @@ function splitCell(cell) {
     var newCellMass = cell.mass / 2;
     if (newCellMass >= world.minMass) {
         changeMass(cell, newCellMass);
-        var spawnPos = findNewPoint(cell.position.x, cell.position.y, cell.angle, (cell.radius * 2) + 5);
+        var spawnPos = findNewPoint(cell.position, cell.angle, (cell.radius * 2) + 5);
         var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, "player", cell.playerId);
         nCell.angle = cell.angle;
         var fv = getForceVector(nCell.angle, cell.speed + 50);
@@ -329,10 +329,10 @@ function getAngle(pos1, pos2) {
     return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x) * 180 / Math.PI;
 }
 
-function findNewPoint(x, y, angle, distance) {
+function findNewPoint(pos, angle, distance) {
     var result = {};
-    result.x = Math.round(Math.cos(angle * Math.PI / 180) * distance + x);
-    result.y = Math.round(Math.sin(angle * Math.PI / 180) * distance + y);
+    result.x = Math.round(Math.cos(angle * Math.PI / 180) * distance + pos.x);
+    result.y = Math.round(Math.sin(angle * Math.PI / 180) * distance + pos.y);
     return result;
 }
 
