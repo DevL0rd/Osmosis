@@ -3,6 +3,7 @@
 
 var world = {
     cells: {},
+    cellTypes: { food: 1, player: 2 },
     travelSpeed: 50,
     speedDecreaseScalar: 0.2,
     globalFriction: 0.5,
@@ -45,7 +46,7 @@ function updateCells() {
 }
 function updateCell(cell) {
     applyGlobalFriction(cell);
-    if (cell.type == "player") {
+    if (cell.type === world.cellTypes.player) {
         updateMass(cell);
         //set the forces on the cell to keep it moving;
         setForce(cell, cell.angle, cell.speed);
@@ -75,7 +76,7 @@ function applyGlobalFriction(cell) {
     cell.force.y -= (cell.force.y * world.globalFriction) * delta;
 }
 function updatePosition(cell) {
-    if (cell.force.x == 0 && cell.force.y == 0) return false;
+    if (cell.force.x === 0 && cell.force.y === 0) return false;
     cell.position.x += cell.force.x * delta;
     cell.position.y += cell.force.y * delta;
 }
@@ -84,7 +85,7 @@ function applyForceCutoff(cell) {
     if (cell.force.y < world.forceCutOff && cell.force.y > -world.forceCutOff) cell.force.y = 0;
 }
 function updateMass(cell) {
-    if (cell.mass != world.minMass) {
+    if (cell.mass !== world.minMass) {
         var newMass = cell.mass - (cell.mass * world.massDecay) * delta;
         if (newMass < world.minMass) newMass = world.minMass;
         setMass(cell, newMass);
@@ -103,7 +104,7 @@ function resolveCollisions() {
 }
 
 function isMoving(cell) {
-    return (cell.force.x != 0 || cell.force.y != 0);
+    return (cell.force.x !== 0 || cell.force.y !== 0);
 }
 
 function getCollidingCells() {
@@ -179,13 +180,13 @@ function detectCellToWallCollision(cell) {
 }
 
 function handleCellToCellCollision(cellPair) {
-    if (cellPair.cellA.mass > cellPair.cellB.mass && cellPair.cellA.type == "player") {
+    if (cellPair.cellA.mass > cellPair.cellB.mass && cellPair.cellA.type === world.cellTypes.player) {
         //if cell is halfway over the target cell.
         if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= cellPair.cellA.radius) {
             addMass(cellPair.cellA, cellPair.cellB.mass);
             removeCell(cellPair.cellB);
         }
-    } else if (cellPair.cellB.type == "player") {
+    } else if (cellPair.cellB.type === world.cellTypes.player) {
         //if cell is halfway over the target cell.
         if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= cellPair.cellB.radius) {
             addMass(cellPair.cellB, cellPair.cellA.mass);
@@ -201,7 +202,7 @@ function handleCellToWallCollision(cellCollisions) {
     }
 }
 
-function addCell(x, y, mass, type = "food", playerId) {
+function addCell(x, y, mass, type = world.cellTypes.food, playerId) {
     var nCell = {};
     nCell.type = type;
     nCell.position = {
@@ -232,9 +233,9 @@ function addCell(x, y, mass, type = "food", playerId) {
 }
 
 function removeCell(cell) {
-    if (cell.type == "food") {
+    if (cell.type === world.cellTypes.food) {
         world.foodCount--;
-    } else if (cell.type == "player") {
+    } else if (cell.type === world.cellTypes.player) {
         if (players[cell.playerId] && players[cell.playerId].cells[cell.id]) {
             var playerCells = getAllPlayerCells(cell.playerId);
             var largestCell = getLargestCell(playerCells);
@@ -259,7 +260,7 @@ function splitCell(cell) {
     if (newCellMass >= world.minMass) {
         setMass(cell, newCellMass);
         var spawnPos = findNewPoint(cell.position, cell.angle, (cell.radius * 2) + 5);
-        var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, "player", cell.playerId);
+        var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, world.cellTypes.player, cell.playerId);
         nCell.angle = cell.angle;
         setForce(nCell, nCell.angle, cell.speed + 50);
         nCell.graphics.color = "purple";
@@ -300,7 +301,7 @@ function sendPlayerFocusedCell(playerId) {
 function spawnPlayer(socket) {
     var spawnPos = getRandomSpawn(50);
     socket.playerId = generateId();
-    var playerCell = addCell(spawnPos.x, spawnPos.y, world.playerSpawnSize, "player", socket.playerId);
+    var playerCell = addCell(spawnPos.x, spawnPos.y, world.playerSpawnSize, world.cellTypes.player, socket.playerId);
     players[socket.playerId].socket = socket;
     players[socket.playerId].focusedCellId = playerCell.id;
     sendPlayerFocusedCell(playerCell.playerId);
