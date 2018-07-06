@@ -131,7 +131,7 @@ function getAngle(pos1, pos2) {
     return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x) * 180 / Math.PI;
 }
 window.onmousemove = trackMouseMove;
-var mouseMoved = true;
+var mouseMoved = false;
 function trackMouseMove(event) {
     mousePos = {
         x: event.clientX - canvasTranslation.x,

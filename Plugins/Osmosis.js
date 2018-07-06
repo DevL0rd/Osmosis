@@ -185,15 +185,15 @@ function detectCellToWallCollision(cell) {
 }
 
 function handleCellToCellCollision(cellPair) {
-    if (cellPair.cellA.mass > cellPair.cellB.mass) {
+    if (cellPair.cellA.mass > cellPair.cellB.mass && cellPair.cellA.type == "player") {
         //if cell is halfway over the target cell.
-        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) >= cellPair.cellB.radius) {
+        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) >= cellPair.cellA.radius) {
             addMass(cellPair.cellA, cellPair.cellB.mass);
             removeCell(cellPair.cellB);
         }
-    } else {
+    } else if (cellPair.cellB.type == "player") {
         //if cell is halfway over the target cell.
-        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) >= cellPair.cellA.radius) {
+        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) >= cellPair.cellB.radius) {
             addMass(cellPair.cellB, cellPair.cellA.mass);
             removeCell(cellPair.cellA);
         }
@@ -376,17 +376,21 @@ function init(plugins, settings, events, io, log, commands) {
             }
         });
         socket.on("mouseMove", function (mousePos) {
-            if (socket.playerId) {
+            //validate input and make sure user is playing
+            if (socket.playerId && mousePos && mousePos.y && mousePos.x) {
                 var pCells = getAllPlayerCells(socket.playerId);
                 for (i in pCells) {
                     var cell = pCells[i];
+                    //set the angle of each cell to follow the mouse
                     cell.angle = getAngle(cell.position, mousePos);
                 }
             }
         });
         socket.on("spaceDown", function () {
+            //make sure user is playing
             if (socket.playerId) {
                 var pCells = getAllPlayerCells(socket.playerId);
+                //split all of players cells
                 splitCells(pCells);
             }
         });
