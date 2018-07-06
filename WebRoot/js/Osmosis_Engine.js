@@ -5,10 +5,6 @@ var isPlaying = true;
 var then = Date.now();
 var now = Date.now();
 var delta = (now - then) / 1000;
-var camerPos = {
-    x: 0,
-    y: 0
-}
 function loopStart() {
     now = Date.now();
     delta = (now - then) / 1000;
@@ -135,17 +131,18 @@ function getAngle(pos1, pos2) {
     return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x) * 180 / Math.PI;
 }
 window.onmousemove = trackMouseMove;
+var mouseMoved = true;
 function trackMouseMove(event) {
     mousePos = {
         x: event.clientX - canvasTranslation.x,
         y: event.clientY - canvasTranslation.y
     };
-
+    mouseMoved = true;
 }
 setInterval(function () {
-    if (isPlaying && mousePos && focusedCellId && world.cells[focusedCellId]) {
+    if (isPlaying && mouseMoved) {
         socket.emit("mouseMove", mousePos);
-        delete mousePos;
+        mouseMoved = false;
     }
 }, 40);
 window.onkeydown = keyDown;

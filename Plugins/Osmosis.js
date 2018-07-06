@@ -7,7 +7,7 @@ var world = {
     radiusScalar: 0.3,
     massDecay: 0.01,
     minMass: 10,
-    playerSpawnSize: 20,
+    playerSpawnSize: 50,
     minSpeedScalar: 0.99,
     forceCutOff: 0.05,
     width: 500,
@@ -207,13 +207,6 @@ function handleCellToWallCollision(cellCollisions) {
     }
 }
 
-function generateId() {
-    var timestamp = (new Date().getTime() / 1000 | 0).toString(16);
-    return timestamp + 'xxxxxxxxxxxxxxxx'.replace(/[x]/g, function () {
-        return (Math.random() * 16 | 0).toString(16);
-    }).toLowerCase();
-}
-
 function addCell(x, y, mass, type = "food", playerId) {
     var nCell = {};
     nCell.type = type;
@@ -272,9 +265,9 @@ function splitCell(cell) {
         var spawnPos = findNewPoint(cell.position.x, cell.position.y, cell.angle, (cell.radius * 2) + 5);
         var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, "player", cell.playerId);
         nCell.angle = cell.angle;
-        // var fv = getForceVector(nCell.angle, cell.speed + 50);
-        // nCell.force.x += fv.x;
-        // nCell.force.y += fv.y;
+        var fv = getForceVector(nCell.angle, cell.speed + 50);
+        nCell.force.x += fv.x;
+        nCell.force.y += fv.y;
         nCell.graphics.color = "purple";
     }
 }
@@ -331,9 +324,11 @@ function getDistance(pos1, pos2) {
     var b = pos1.y - pos2.y;
     return Math.sqrt(a * a + b * b);
 }
+
 function getAngle(pos1, pos2) {
     return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x) * 180 / Math.PI;
 }
+
 function findNewPoint(x, y, angle, distance) {
     var result = {};
     result.x = Math.round(Math.cos(angle * Math.PI / 180) * distance + x);
@@ -343,6 +338,13 @@ function findNewPoint(x, y, angle, distance) {
 
 function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function generateId() {
+    var timestamp = (new Date().getTime() / 1000 | 0).toString(16);
+    return timestamp + 'xxxxxxxxxxxxxxxx'.replace(/[x]/g, function () {
+        return (Math.random() * 16 | 0).toString(16);
+    }).toLowerCase();
 }
 
 function init(plugins, settings, events, io, log, commands) {
