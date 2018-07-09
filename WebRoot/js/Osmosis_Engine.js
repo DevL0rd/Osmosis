@@ -132,7 +132,7 @@ function gameLoop() {
     loopStart();
     updateCells();
     var elapsedTime = loopEnd();
-    console.log(elapsedTime);
+    //console.log(elapsedTime);
     setTimeout(gameLoop, 16);
 }
 

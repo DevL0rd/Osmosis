@@ -5,7 +5,7 @@ var world = {
     cells: {},
     cellTypes: { food: 1, player: 2 },
     travelSpeed: 50,
-    speedDecreaseScalar: 0.2,
+    speedDecreaseScalar: 1,
     globalFriction: 0.5,
     radiusScalar: 0.3,
     massDecay: 0.01,
@@ -16,7 +16,7 @@ var world = {
     height: 5000,
     foodCount: 0,
     maxFoodCount: 5000,
-    foodSpawnSpeed: 1000,
+    foodSpawnSpeed: 50,
     foodSpawnAmount: 50,
     minFoodSize: 3,
     maxFoodSize: 7
@@ -118,8 +118,8 @@ function getCollidingCells() {
             //Against all cells
             for (iB in keys) {
                 var cellB = world.cells[keys[iB]];
-                //compare non matching cells, and exclude already checked cells
-                if (keys[iA] != keys[iB] && !checkedCells[keys[iB]]) {
+                //compare non matching cells, and exclude already checked cells, and do an AABB collision check for approximation.
+                if (keys[iA] != keys[iB] && !checkedCells[keys[iB]] && AABBCollisionCheck(cellA, cellB)) {
                     var collidingCellPair = detectCellToCellCollision(cellA, cellB);
                     if (collidingCellPair) {
                         collidingCells.push(collidingCellPair);
@@ -130,6 +130,23 @@ function getCollidingCells() {
         }
     }
     return collidingCells;
+}
+
+function AABBCollisionCheck(cellA, cellB) {
+    var cellASides = getCellSides(cellA);
+    var cellBSides = getCellSides(cellB);
+    if (cellASides.t > cellBSides.t && cellASides.t < cellBSides.b) {
+        return true; //top collision
+    }
+    if (cellASides.b < cellBSides.b && cellASides.b > cellBSides.t) {
+        return true; //bottom collision
+    }
+    if (cellASides.r < cellBSides.r && cellASides.r > cellBSides.l) {
+        return true; //right collision
+    }
+    if (cellASides.l > cellBSides.l && cellASides.l < cellBSides.r) {
+        return true;
+    }
 }
 
 function getCellsCollidingWithWall() {
@@ -206,7 +223,6 @@ function handleCellToWallCollision(cellCollisions) {
         cellCollision.cell.position[cellCollision.axis] -= cellCollision.collisionDepth;
     }
 }
-
 function addCell(x, y, mass, type = world.cellTypes.food, playerId) {
     var nCell = {};
     nCell.type = type;
@@ -321,6 +337,9 @@ function init(plugins, settings, events, io, log, commands) {
         //send updates to client
         io.emit("worldUpdate", world);
         var elapsedTime = loopEnd();
+        //console.log(elapsedTime);
+
+        //keep updates to client steady
         var loopTime = 40 - elapsedTime;
         if (loopTime < 0) loopTime = 0;
         setTimeout(gameLoop, loopTime);
@@ -328,9 +347,7 @@ function init(plugins, settings, events, io, log, commands) {
     gameLoop();
     events.on("connection", function (socket) {
         socket.emit("worldData", world);
-
         var playerCell = spawnPlayer(socket);
-
         socket.on("disconnect", function () {
             //make sure user is playing
             if (socket.playerId) {
@@ -465,7 +482,14 @@ function setMass(cell, mass) {
     //TODO fix
     cell.speed = (world.travelSpeed / (mass * world.speedDecreaseScalar)) * world.travelSpeed;
 }
-
+function getCellSides(cell) {
+    return {
+        t: cell.y - cell.radius,
+        b: cell.y + cell.radius,
+        l: cell.x - cell.radius,
+        r: cell.x + cell.radius
+    }
+}
 function generateId() {
     var timestamp = (new Date().getTime() / 1000 | 0).toString(16);
     return timestamp + 'xxxxxxxxxxxxxxxx'.replace(/[x]/g, function () {
