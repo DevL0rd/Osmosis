@@ -1,9 +1,9 @@
 //Authour: DevL0rd
 //GitHub: https://github.com/DevL0rd
-var Graphics = {}
+var Graphics = {};
 Graphics.newGraphicsObj = function (canvasID, context, nWidth, nHeight, funcRenderFrame, funcResize, dbg = false) {
-	var newGraphicsOBJ = {}
-	newGraphicsOBJ.debugenabled = dbg
+	var newGraphicsOBJ = {};
+	newGraphicsOBJ.debugenabled = dbg;
 	newGraphicsOBJ.NewFrameQueued = true;
 	newGraphicsOBJ.PerformanceSampleRate = 10;
 	newGraphicsOBJ.DrawDelay = 0;
@@ -14,7 +14,7 @@ Graphics.newGraphicsObj = function (canvasID, context, nWidth, nHeight, funcRend
 	newGraphicsOBJ.fps = 0;
 	newGraphicsOBJ.QueueFrame = function () {
 		this.NewFrameQueued = true;
-	}
+	};
 	newGraphicsOBJ.startTime = 0;
 	newGraphicsOBJ.frameNumber = 0;
 	newGraphicsOBJ.d = new Date().getTime();
@@ -22,7 +22,7 @@ Graphics.newGraphicsObj = function (canvasID, context, nWidth, nHeight, funcRend
 	newGraphicsOBJ.context = newGraphicsOBJ.canvas.getContext(context);
 	document.body.onresize = function () {
 		funcResize(newGraphicsOBJ.canvas);
-	}
+	};
 	newGraphicsOBJ.canvas.width = nWidth;
 	newGraphicsOBJ.canvas.height = nHeight;
 	newGraphicsOBJ.RenderFrame = funcRenderFrame;
@@ -32,15 +32,15 @@ Graphics.newGraphicsObj = function (canvasID, context, nWidth, nHeight, funcRend
 		newGraphicsOBJ.context.camerPos = {
 			x: pos.x,
 			y: pos.y
-		}
+		};
 		newGraphicsOBJ.context.translation = {
 			x: -pos.x + this.canvas.width / 2,
 			y: -pos.y + this.canvas.height / 2
-		}
+		};
 		this.translate(-pos.x + this.canvas.width / 2, -pos.y + this.canvas.height / 2);
-	}
-	Graphics.init(newGraphicsOBJ)
-}
+	};
+	Graphics.init(newGraphicsOBJ);
+};
 Graphics.init = function (graphicsObj) {
 	var now = new Date();
 	if (graphicsObj.debugenabled) {
@@ -55,24 +55,24 @@ Graphics.init = function (graphicsObj) {
 				if (NewDrawDelay - graphicsObj.ApproxMaxDrawDelay < 3 || graphicsObj.ApproxMaxDrawDelay == 0) {
 					//If the delay increases to fast, this will be skipped,
 					graphicsObj.ApproxMaxDrawDelay = NewDrawDelay;
-				};
-			};
+				}
+			}
 		} else {
 			graphicsObj.PerformanceSampleTick++;
-		};
-	};
+		}
+	}
 	//Render frame
 	if (graphicsObj.NewFrameQueued) {
 		graphicsObj.NewFrameQueued = false;
-		var fillStyleBKUP = graphicsObj.context.fillStyle
+		var fillStyleBKUP = graphicsObj.context.fillStyle;
 		//TODO double buffer
-		//graphicsObj.context.clearRect(-graphicsObj.context.translation.x, -graphicsObj.context.translation.y, graphicsObj.canvas.width, graphicsObj.canvas.height)
+		//graphicsObj.context.clearRect(-graphicsObj.context.translation.x, -graphicsObj.context.translation.y, graphicsObj.canvas.width, graphicsObj.canvas.height);
 		graphicsObj.RenderFrame(graphicsObj.canvas, graphicsObj.context);
 		if (graphicsObj.debugenabled) {
-			var fillStyleBKUP = graphicsObj.context.fillStyle
-			graphicsObj.context.fillStyle = "#f44242"
-			graphicsObj.context.fillText(graphicsObj.fps, -graphicsObj.context.translation.x + 10, -graphicsObj.context.translation.y + 10)
-			graphicsObj.context.fillStyle = fillStyleBKUP
+			var fillStyleBKUP = graphicsObj.context.fillStyle;
+			graphicsObj.context.fillStyle = "#f44242";
+			graphicsObj.context.fillText(graphicsObj.fps, -graphicsObj.context.translation.x + 10, -graphicsObj.context.translation.y + 10);
+			graphicsObj.context.fillStyle = fillStyleBKUP;
 		}
 	}
 
@@ -85,7 +85,7 @@ Graphics.init = function (graphicsObj) {
 		if (currentTime > 1) {
 			graphicsObj.startTime = new Date().getTime();
 			graphicsObj.frameNumber = 0;
-		};
+		}
 		if (graphicsObj.PerformanceSampleTick >= graphicsObj.PerformanceSampleRate) {
 			//if it is time to sample performance, update the FPS displayed on the debug menu.
 			graphicsObj.fps = fpsnow;
@@ -95,12 +95,12 @@ Graphics.init = function (graphicsObj) {
 			if (graphicsObj.RenderTimeMS > graphicsObj.ApproxMaxDrawDelay) {
 				//Updatehighest time for rendering
 				graphicsObj.RenderTimeMS = graphicsObj.ApproxMaxDrawDelay;
-			};
-		};
-	};
+			}
+		}
+	}
 	//Request the next animation frame asynchronously from the browser.
 	requestAnimationFrame(function () {
-		Graphics.init(graphicsObj)
+		Graphics.init(graphicsObj);
 	});
 
 	if (graphicsObj.debugenabled) {
@@ -108,7 +108,7 @@ Graphics.init = function (graphicsObj) {
 			//if it is time to sample performance
 			//record the time the last frame finished rendering.
 			graphicsObj.DrawRequestTime = new Date();
-		};
-	};
+		}
+	}
 
-}
+};

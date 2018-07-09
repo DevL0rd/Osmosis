@@ -1,8 +1,8 @@
-Graphics.newGraphicsObj("gameCanvas", "2d", window.innerWidth, window.innerHeight, renderFrame, onResize, true)
+Graphics.newGraphicsObj("gameCanvas", "2d", window.innerWidth, window.innerHeight, renderFrame, onResize, true);
 var canvasTranslation = {
     x: 0,
     y: 0
-}
+};
 function renderFrame(canvas, context) {
     //draw world border
     //redraw fix...

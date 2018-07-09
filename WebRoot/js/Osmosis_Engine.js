@@ -162,7 +162,7 @@ function trackMouseMove(event) {
         x: event.clientX - canvasTranslation.x,
         y: event.clientY - canvasTranslation.y
     };
-    playerOnMouseMove(mousePos)
+    playerOnMouseMove(mousePos);
     mouseMoved = true;
 }
 

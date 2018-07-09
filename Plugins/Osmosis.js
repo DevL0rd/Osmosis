@@ -20,7 +20,7 @@ var world = {
     foodSpawnAmount: 50,
     minFoodSize: 3,
     maxFoodSize: 7
-}
+};
 var players = {};
 var then = Date.now();
 var now = Date.now();
@@ -57,7 +57,7 @@ function updateCell(cell) {
 function foodTick() {
     var spawnCount = world.foodSpawnAmount;
     while (spawnCount > 0 && world.foodCount < world.maxFoodCount) {
-        spawnRandomFoodCell()
+        spawnRandomFoodCell();
         spawnCount--;
     }
 }
@@ -145,7 +145,7 @@ function AABBCollisionCheck(cellA, cellB) {
         return true; //right collision
     }
     if (cellASides.l > cellBSides.l && cellASides.l < cellBSides.r) {
-        return true;
+        return true; //left collision
     }
 }
 
@@ -164,7 +164,7 @@ function getCellsCollidingWithWall() {
 }
 
 function detectCellToCellCollision(cellA, cellB) {
-    var radiusAdded = cellA.radius + cellB.radius
+    var radiusAdded = cellA.radius + cellB.radius;
     var collisionDepth = getDistanceBetweenCells(cellA, cellB);
     if (collisionDepth < radiusAdded) return { cellA: cellA, cellB: cellB, collisionDepth: collisionDepth };
     return false;
@@ -229,12 +229,12 @@ function addCell(x, y, mass, type = world.cellTypes.food, playerId) {
     nCell.position = {
         x: x,
         y: y
-    }
+    };
     nCell.lastPosition = Object.assign(nCell.position, {});
     nCell.force = {
         x: 0,
         y: 0
-    }
+    };
     nCell.angle = 0;
     nCell.graphics = {
         color: "rgb(0,255,255)"
@@ -347,7 +347,6 @@ function init(plugins, settings, events, io, log, commands) {
     gameLoop();
     events.on("connection", function (socket) {
         socket.emit("worldData", world);
-        var playerCell = spawnPlayer(socket);
         socket.on("disconnect", function () {
             //make sure user is playing
             if (socket.playerId) {
@@ -366,10 +365,12 @@ function init(plugins, settings, events, io, log, commands) {
                 playerOnSplit(socket.playerId);
             }
         });
+        socket.on("spawn", function () {
+            var playerCell = spawnPlayer(socket);
+        });
     });
 }
 function testCellCollision(testCell) {
-
     for (i in world.cells) {
         var cell = world.cells[i];
         var collidingCellPair = detectCellToCellCollision(testCell, cell);
@@ -377,7 +378,7 @@ function testCellCollision(testCell) {
             return true;
         }
     }
-    return false
+    return false;
 }
 
 function getRandomSpawn(radius) {
@@ -390,7 +391,7 @@ function getRandomSpawn(radius) {
                 x: rX,
                 y: rY
             };
-        };
+        }
     }
 }
 
@@ -405,7 +406,7 @@ function getAllPlayerCells(playerId) {
 }
 
 function getLargestCell(cells) {
-    var largestCell
+    var largestCell;
     for (i in cells) {
         var cell = cells[i];
         if (!largestCell) largestCell = cell;
@@ -488,7 +489,7 @@ function getCellSides(cell) {
         b: cell.y + cell.radius,
         l: cell.x - cell.radius,
         r: cell.x + cell.radius
-    }
+    };
 }
 function generateId() {
     var timestamp = (new Date().getTime() / 1000 | 0).toString(16);
@@ -497,4 +498,4 @@ function generateId() {
     }).toLowerCase();
 }
 
-module.exports.init = init
+module.exports.init = init;
