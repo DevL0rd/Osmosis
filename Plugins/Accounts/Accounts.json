@@ -1,1 +1,48 @@
-{}
+{
+	"test@test.test": {
+		"username": "test",
+		"password": "$2b$08$xD6HgMn.cpnREZMUUoG/qu5vpbL9ZouxBAHqtyMcB7D/rC2E8MQHa",
+		"accountCreationTS": 1527634928380,
+		"profilePicture": "/img/profilePics/noprofilepic.jpg",
+		"loginKeys": {
+			"a0e3a329c05ad067fda574ddff23a57f9c7e25a2c0849b7df1c15f944898c816": {
+				"ip": "127.0.0.1",
+				"timeout": 1536889605319
+			},
+			"30597a64adbd86d660cb20ed97c62e8ae0cc75febaee5e00a8cecc6e610147cd": {
+				"ip": "127.0.0.1",
+				"timeout": 1536953237025
+			},
+			"a1b2933079116d1c0c1a6a69fade60e6cd4c7225a23aee0e276fe2d21ac1f47d": {
+				"ip": "127.0.0.1",
+				"timeout": 1536975664785
+			},
+			"afa4a42b9574eb1ebe522ea09f1a6e8ca975890e62ba1b5bb8d46688e266c59e": {
+				"ip": "192.168.0.32",
+				"timeout": 1536979786044
+			}
+		},
+		"permissionGroups": [],
+		"permissions": [],
+		"lastIp": "192.168.0.32",
+		"lastLoginTS": 1536115786044
+	},
+	"dmhzmxn@gmail.com": {
+		"username": "Devlord",
+		"password": "$2a$08$YGPZ4Gfx5w5DyuLmu.0CAeQLuVrxBGR.0p3yMQjR4GSro3HejsfAi",
+		"accountCreationTS": 1565979279551,
+		"profilePicture": "/img/profilePics/Devlord.jpg",
+		"loginKeys": {
+			"7f8a622ca9445f5a3f018bab63590419d2e4207c1a1ee0b400a7483db60b3020": {
+				"ip": "127.0.0.1",
+				"timeout": 1566844250288
+			}
+		},
+		"permissionGroups": [
+			"admin"
+		],
+		"permissions": [],
+		"lastIp": "127.0.0.1",
+		"lastLoginTS": 1565980250288
+	}
+}

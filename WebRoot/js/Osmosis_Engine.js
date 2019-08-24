@@ -16,76 +16,13 @@ function loopEnd() {
     return elapsedTime;
 }
 
-function getCellsCollidingWithWall() {
-    var collidingCells = [];
-    for (i in world.cells) {
-        var cell = world.cells[i];
-        if (isMoving(cell)) {
-            var cellCollision = detectCellToWallCollision(cell);
-            if (cellCollision) {
-                collidingCells.push(cellCollision);
-            }
-        }
-    }
-    return collidingCells;
-}
-
-function resolveCollisions() {
-    var wallCollidingCells = getCellsCollidingWithWall();
-    wallCollidingCells.forEach(function (cellCollisions) {
-        handleCellToWallCollision(cellCollisions);
-    })
-}
-
-function detectCellToWallCollision(cell) {
-    var collisonAxi = [];
-    if (cell.position.x <= cell.radius || cell.position.x >= world.width - cell.radius) {
-        var collisionDepth = 0;
-        if (cell.position.x <= cell.radius) {
-            collisionDepth = cell.position.x - cell.radius;
-        } else {
-            collisionDepth = cell.position.x - world.width + cell.radius;
-        }
-        collisonAxi.push({
-            cell: cell,
-            axis: "x",
-            collisionDepth: collisionDepth
-        });
-    }
-    if (cell.position.y <= cell.radius || cell.position.y >= world.height - cell.radius) {
-        var collisionDepth = 0;
-        if (cell.position.y <= cell.radius) {
-            collisionDepth = cell.position.y - cell.radius;
-        } else {
-            collisionDepth = cell.position.y - world.height + cell.radius;
-        }
-        collisonAxi.push({
-            cell: cell,
-            axis: "y",
-            collisionDepth: collisionDepth
-        });
-    }
-    return collisonAxi;
-}
-
-function handleCellToWallCollision(cellCollisions) {
-    for (i in cellCollisions) {
-        var cellCollision = cellCollisions[i];
-        cellCollision.cell.position[cellCollision.axis] -= cellCollision.collisionDepth;
-    }
-}
-
-function isMoving(cell) {
-    return (cell.force.x != 0 || cell.force.y != 0);
-}
-
 function updateCells() {
     for (i in world.cells) {
         var cell = world.cells[i];
-        //Server side only
         updateCell(cell);
     }
-    resolveCollisions();
+    //Server side only
+    //resolveCollisions();
 }
 function updateCell(cell) {
     applyGlobalFriction(cell);
@@ -139,10 +76,18 @@ function gameLoop() {
 socket.on("worldData", function (worldData) {
     world = worldData;
     gameLoop();
+    socket.emit("spawn");
 });
 
 socket.on("worldUpdate", function (worldData) {
-    world = worldData;
+    for (i in worldData.updatedCells) {
+        var uCell = worldData.updatedCells[i];
+        world.cells[uCell.id] = uCell;
+    }
+    for (i in worldData.removedCells) {
+        var rCell = worldData.removedCells[i];
+        delete world.cells[rCell.id];
+    }
 });
 
 socket.on("getFocusedCellId", function (cellId) {

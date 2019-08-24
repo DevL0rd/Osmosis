@@ -5,7 +5,7 @@ var world = {
     cells: {},
     cellTypes: { food: 1, player: 2 },
     travelSpeed: 50,
-    speedDecreaseScalar: 1,
+    speedDecreaseScalar: 0.5,
     globalFriction: 0.5,
     radiusScalar: 0.3,
     massDecay: 0.01,
@@ -16,12 +16,14 @@ var world = {
     height: 5000,
     foodCount: 0,
     maxFoodCount: 5000,
-    foodSpawnSpeed: 50,
-    foodSpawnAmount: 50,
+    foodSpawnSpeed: 100,
+    foodSpawnAmount: 25,
     minFoodSize: 3,
     maxFoodSize: 7
 };
 var players = {};
+var updatedCells = [];
+var removedCells = [];
 var then = Date.now();
 var now = Date.now();
 var delta = (now - then) / 1000;
@@ -37,6 +39,8 @@ function loopEnd() {
     return elapsedTime;
 }
 function updateCells() {
+    updatedCells = [];
+    removedCells = [];
     for (i in world.cells) {
         var cell = world.cells[i];
         //Server side only
@@ -79,6 +83,8 @@ function updatePosition(cell) {
     if (cell.force.x === 0 && cell.force.y === 0) return false;
     cell.position.x += cell.force.x * delta;
     cell.position.y += cell.force.y * delta;
+    cell.needsSidesRecalc = true;
+    updatedCells.push(cell);
 }
 function applyForceCutoff(cell) {
     if (cell.force.x < world.forceCutOff && cell.force.x > -world.forceCutOff) cell.force.x = 0;
@@ -109,7 +115,6 @@ function isMoving(cell) {
 
 function getCollidingCells() {
     var collidingCells = [];
-    var checkedCells = {};
     var keys = Object.keys(world.cells);
     for (iA in keys) {
         var cellA = world.cells[keys[iA]];
@@ -119,14 +124,13 @@ function getCollidingCells() {
             for (iB in keys) {
                 var cellB = world.cells[keys[iB]];
                 //compare non matching cells, and exclude already checked cells, and do an AABB collision check for approximation.
-                if (keys[iA] != keys[iB] && !checkedCells[keys[iB]] && AABBCollisionCheck(cellA, cellB)) {
+                if (iA != iB && AABBCollisionCheck(cellA, cellB)) {
                     var collidingCellPair = detectCellToCellCollision(cellA, cellB);
                     if (collidingCellPair) {
                         collidingCells.push(collidingCellPair);
                     }
                 }
             }
-            checkedCells[keys[iA]] = true; //flagAsChecked
         }
     }
     return collidingCells;
@@ -206,12 +210,14 @@ function handleCellToCellCollision(cellPair) {
         //if cell is halfway over the target cell.
         if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= cellPair.cellA.radius) {
             addMass(cellPair.cellA, cellPair.cellB.mass);
+            cellPair.cellB.mass = 0; //prevent double mass gain
             removeCell(cellPair.cellB);
         }
     } else if (cellPair.cellB.type === world.cellTypes.player) {
         //if cell is halfway over the target cell.
         if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= cellPair.cellB.radius) {
             addMass(cellPair.cellB, cellPair.cellA.mass);
+            cellPair.cellA.mass = 0; //prevent double mass gain
             removeCell(cellPair.cellA);
         }
     }
@@ -240,6 +246,13 @@ function addCell(x, y, mass, type = world.cellTypes.food, playerId) {
         color: "rgb(0,255,255)"
     };
     setMass(nCell, mass);
+    nCell.sides = {
+        t: nCell.position.y - nCell.radius,
+        b: nCell.position.y + nCell.radius,
+        l: nCell.position.x - nCell.radius,
+        r: nCell.position.x + nCell.radius
+    };
+    nCell.needsSidesRecalc = true;
     nCell.id = generateId();
     if (playerId) {
         nCell.playerId = playerId;
@@ -250,6 +263,7 @@ function addCell(x, y, mass, type = world.cellTypes.food, playerId) {
         players[playerId].cells[nCell.id] = true;
     }
     world.cells[nCell.id] = nCell;
+    updatedCells.push(nCell);
     return nCell;
 }
 
@@ -266,6 +280,7 @@ function removeCell(cell) {
             delete players[cell.playerId].cells[cell.id];
         }
     }
+    removedCells.push(cell);
     delete world.cells[cell.id];
 }
 
@@ -335,7 +350,7 @@ function init(plugins, settings, events, io, log, commands) {
         loopStart();
         updateCells();
         //send updates to client
-        io.emit("worldUpdate", world);
+        io.emit("worldUpdate", { updatedCells: updatedCells, removedCells: removedCells });
         var elapsedTime = loopEnd();
         //console.log(elapsedTime);
 
@@ -480,16 +495,21 @@ function addMass(cell, mass) {
 function setMass(cell, mass) {
     cell.mass = mass;
     cell.radius = cell.mass * world.radiusScalar;
-    //TODO fix
     cell.speed = (world.travelSpeed / (mass * world.speedDecreaseScalar)) * world.travelSpeed;
+    cell.needsSidesRecalc = false;
 }
 function getCellSides(cell) {
-    return {
-        t: cell.y - cell.radius,
-        b: cell.y + cell.radius,
-        l: cell.x - cell.radius,
-        r: cell.x + cell.radius
-    };
+    if (cell.needsSidesRecalc) {
+        cell.sides = {
+            t: cell.position.y - cell.radius,
+            b: cell.position.y + cell.radius,
+            l: cell.position.x - cell.radius,
+            r: cell.position.x + cell.radius
+        };
+        cell.needsSidesRecalc = false;
+    }
+    return cell.sides
+
 }
 function generateId() {
     var timestamp = (new Date().getTime() / 1000 | 0).toString(16);
