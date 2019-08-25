@@ -22,7 +22,11 @@ function renderFrame(canvas, context) {
 function renderCells(cells, context) {
     for (i in cells) {
         var cell = cells[i];
-        renderCell(cell, context);
+        if (cell.position.x + canvasTranslation.x > 0 && cell.position.x + canvasTranslation.x < window.innerWidth) {
+            if (cell.position.y + canvasTranslation.y > 0 && cell.position.y + canvasTranslation.y < + window.innerHeight) {
+                renderCell(cell, context);
+            }
+        }
     }
 }
 function renderCell(cell, context) {

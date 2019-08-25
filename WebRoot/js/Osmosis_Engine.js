@@ -24,10 +24,16 @@ function updateCells() {
     //Server side only
     //resolveCollisions();
 }
+
+function isMoving(cell) {
+    return (cell.force.x !== 0 || cell.force.y !== 0);
+}
 function updateCell(cell) {
-    applyGlobalFriction(cell);
-    applyForceCutoff(cell);
-    updatePosition(cell);
+    if (isMoving(cell)) {
+        applyGlobalFriction(cell);
+        applyForceCutoff(cell);
+        updatePosition(cell);
+    }
 }
 
 function applyGlobalFriction(cell) {
@@ -41,7 +47,6 @@ function applyForceCutoff(cell) {
 }
 
 function updatePosition(cell) {
-    if (cell.force.x == 0 && cell.force.y == 0) return false;
     cell.position.x += cell.force.x * delta;
     cell.position.y += cell.force.y * delta;
 }
@@ -70,7 +75,7 @@ function gameLoop() {
     updateCells();
     var elapsedTime = loopEnd();
     //console.log(elapsedTime);
-    setTimeout(gameLoop, 16);
+    setTimeout(gameLoop, 10);
 }
 
 socket.on("worldData", function (worldData) {
@@ -116,7 +121,7 @@ setInterval(function () {
         socket.emit("mouseMove", mousePos);
         mouseMoved = false;
     }
-}, 40);
+}, 100);
 
 var pressedKeys = {};
 window.onkeydown = keyDown;
