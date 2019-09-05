@@ -29,6 +29,12 @@ function isMoving(cell) {
     return (cell.force.x !== 0 || cell.force.y !== 0);
 }
 function updateCell(cell) {
+    if (cell.type === world.cellTypes.player) {
+        //Server side only
+        //updateMass(cell);
+        //set the forces on the cell to keep it moving;
+        setForce(cell, cell.angle, cell.speed);
+    }
     if (isMoving(cell)) {
         applyGlobalFriction(cell);
         applyForceCutoff(cell);
@@ -49,6 +55,37 @@ function applyForceCutoff(cell) {
 function updatePosition(cell) {
     cell.position.x += cell.force.x * delta;
     cell.position.y += cell.force.y * delta;
+}
+
+function getForceVector(angle, velocity) {
+    return {
+        x: velocity * Math.cos(angle * Math.PI / 180),
+        y: velocity * Math.sin(angle * Math.PI / 180)
+    };
+}
+
+function getVelocityOfVector(forceVector) {
+    return Math.sqrt(Math.pow(forceVector.x, 2) + Math.pow(forceVector.y, 2));
+}
+
+function setForceVector(cell, forceVector) {
+    cell.force.x = forceVector.x;
+    cell.force.y = forceVector.y;
+}
+
+function addForceVector(cell, forceVector) {
+    cell.force.x += forceVector.x;
+    cell.force.y += forceVector.y;
+}
+
+function setForce(cell, angle, speed) {
+    var fv = getForceVector(angle, speed);
+    setForceVector(cell, fv);
+}
+
+function addForce(cell, angle, speed) {
+    var fv = getForceVector(angle, speed);
+    addForceVector(cell, fv);
 }
 function playerOnMouseMove(mPos) {
     var pCells = getAllPlayerCells();

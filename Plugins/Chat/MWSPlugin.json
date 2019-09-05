@@ -1,6 +1,8 @@
 {
 	"author": "Dustin Harris",
 	"enabled": true,
+	"folder": "C:\\Github\\Osmosis\\Plugins\\Chat",
+	"fullPath": "C:\\Github\\Osmosis\\Plugins\\Chat\\index.js",
 	"loadPriority": "1",
 	"name": "Chat",
 	"varName": "Chat"

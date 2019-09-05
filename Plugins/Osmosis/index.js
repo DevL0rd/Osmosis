@@ -413,16 +413,7 @@ function getDistanceBetweenCells(cellA, cellB) {
     return getDistance(cellA.position, cellB.position);
 }
 
-function getForceVector(angle, velocity) {
-    return {
-        x: velocity * Math.cos(angle * Math.PI / 180),
-        y: velocity * Math.sin(angle * Math.PI / 180)
-    };
-}
 
-function getVelocityOfVector(forceVector) {
-    return Math.sqrt(Math.pow(forceVector.x, 2) + Math.pow(forceVector.y, 2));
-}
 
 function getDistance(pos1, pos2) {
     var a = pos1.x - pos2.x;
@@ -443,6 +434,16 @@ function findNewPoint(pos, angle, distance) {
 
 function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+function getForceVector(angle, velocity) {
+    return {
+        x: velocity * Math.cos(angle * Math.PI / 180),
+        y: velocity * Math.sin(angle * Math.PI / 180)
+    };
+}
+
+function getVelocityOfVector(forceVector) {
+    return Math.sqrt(Math.pow(forceVector.x, 2) + Math.pow(forceVector.y, 2));
 }
 
 function setForceVector(cell, forceVector) {
@@ -471,7 +472,7 @@ function addMass(cell, mass) {
 
 function setMass(cell, mass) {
     cell.mass = mass;
-    cell.radius = cell.mass * world.radiusScalar;
+    cell.radius = Math.sqrt(cell.mass * world.radiusScalar);
     cell.speed = (world.travelSpeed / (mass * world.speedDecreaseScalar)) * world.travelSpeed;
 }
 
