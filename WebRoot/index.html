@@ -3,18 +3,98 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
     <title>Devlord Base Web App</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
     <link rel="stylesheet" href="/css/sytles.css">
 </head>
 
 <body>
+    <a id="loginLink" class="dropdown-item" href="#login" data-toggle="modal">Login</a>
     <canvas id="gameCanvas"></canvas>
+    <div id="login" class="modal fade text-center">
+        <div class="modal-dialog">
+            <div class="modal-content modalPanel">
+                <div class="login-user-img">
+                    <img id="loginImg" src="img/profilePics/noprofilepic.jpg">
+                </div>
+                <img id="logo" src="img/logo_White.png">
+                <button id="closeLogin" type="button" class="close closeModal" data-dismiss="modal">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div id="loginGreeting">
+                    <h4>Please log in</h2>
+                        <span>You must be loged in to play Osmosis!</span>
+                </div>
+                <div id="loginOutput">
+
+                </div>
+                <div id="loginInputs" class="form-input">
+                    <div class="form-group">
+                        <input id="login_email" type="email" class="form-control" placeholder="Email">
+                    </div>
+                    <div class="form-group">
+                        <input id="login_username" class="form-control" placeholder="Username" style="display:none;">
+                    </div>
+                    <div class="form-group">
+                        <input id="login_pswd" type="password" class="form-control" placeholder="Password">
+                    </div>
+                    <div class="form-group">
+                        <input id="login_passwordcheck" type="password" class="form-control"
+                            placeholder="Confirm Password" style="display:none;">
+                    </div>
+                    <button id="login_button" type="submit" class="btn btn-success"
+                        onclick="loginButton()">Login</button>
+                    <button id="register_button" type="submit" class="btn btn-" onclick="showRegister()">Create
+                        An Account</button>
+                    <button id="guest_button" type="submit" class="btn btn-secondary" href="#mainMenu"
+                        data-toggle="modal">Play as
+                        guest</button>
+                    <a href="javascript:void(0)">Forgot Password?</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="mainMenu" class="modal fade text-center">
+        <div class="modal-dialog">
+            <div class="modal-content modalPanel">
+                <img id="logo" src="img/logo_White.png">
+                <button id="closeMenu" type="button" class="close closeModal" data-dismiss="modal">
+                    <i class="fas fa-times"></i>
+                </button>
+                <br>
+                <div id="skinList">
+
+                </div>
+                <div id="menuInputs" class="form-input">
+                    <button id="spawn_button" type="submit" class="btn btn-success" onclick="spawnButton()">Eat Some
+                        Balls</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="pageLoadingCover">
+        <div class="centerVert">
+            <img src="/img/loading.gif" class="loadingGif">
+            <h1 style="color:rgb(206, 206, 206); font-size: 16px;">
+                Osmosis is loading...
+            </h1>
+        </div>
+    </div>
 </body>
 <script src="/js/jquery-3.2.1.min.js"></script>
 <script src="/js/jquery-ui-1.12.1/jquery-ui.js"></script>
+<script src="/js/bootstrap-4.1.0.min.js"></script>
+<script src="/js/popper-1.14.0.min.js"></script>
 <script src="/js/socket.io.js"></script>
 <script src="/js/devlord/graphics.js"></script>
 <script src="/js/client.js"></script>
+<script src="js/accounts.js"></script>
+<!-- <script src="js/chat.js"></script> -->
 <script src="/js/Osmosis_Engine.js"></script>
 <script src="/js/Osmosis_Renderer.js"></script>
+<script>
+    window.onload = function () {
+        $("#pageLoadingCover").fadeOut(1000);
+    }
+</script>
 
 </html>

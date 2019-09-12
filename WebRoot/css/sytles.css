@@ -35,3 +35,147 @@ a:active {
     left: 0px;
     top: 0px;
 }
+
+
+.dropdown-menu {
+    background: rgba(50, 50, 50, 0.2);
+    padding: 0px;
+    border-bottom-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 #00000030;
+    max-height: 500px;
+}
+
+.dropdown-item {
+    display: block;
+    padding: 5px;
+    clear: both;
+    font-weight: 400;
+    color: white;
+    text-align: inherit;
+    white-space: nowrap;
+    background-color: rgba(133, 45, 204, 0.562);
+    border: 0;
+    transition-duration: 0.4s;
+}
+
+.dropdown-item:hover {
+    color: white;
+    background-color: rgba(26, 167, 80, 0.562);
+    border: 0;
+}
+
+.modalPanel {
+    position: relative;
+    margin: 0 auto;
+    margin-top: 100px;
+    padding: 10px;
+    background-color: rgba(20, 20, 20, 0.6);
+    border: 5px solid rgba(0, 0, 253, 0.6);
+    border-radius: 12px 12px 15px 15px;
+    -webkit-box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.75);
+    -moz-box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.75);
+    box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.75);
+    width: 60%;
+}
+
+#loginOutput {
+    margin-bottom: 5px;
+}
+
+@media (max-width: 992px) {
+    .modal {
+        width: 100%;
+    }
+}
+
+.login-user-img {
+    margin-top: -50px;
+}
+
+.login-user-img img {
+    height: 100px;
+    width: 100px;
+    border-radius: 50%;
+    border: 5px solid rgba(255, 255, 255, 0.6);
+}
+
+#profilePic {
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+}
+
+#profilePicInput{
+    margin-bottom: 8px;
+}
+
+#loginGreeting {
+    margin: 10px 0px;
+    color: #f0f0f0;
+}
+
+#loginGreeting h1 {
+    font-size: 30px;
+}
+
+#loginGreeting span {
+    font-size: 10px;
+}
+
+.closeModal {
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    color: #f0f0f0;
+}
+
+.form-input button {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.loginModal-links {
+    border-radius: 0px 0px 5px 5px;
+    background-color: #ECF0F1;
+    padding: 15px;
+}
+
+#pageLoadingCover {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    background: rgb(25, 25, 25);
+    background: -moz-linear-gradient(top, rgba(25, 25, 25, 1) 1%, rgba(35, 35, 35, 1) 31%, rgba(35, 35, 35, 1) 70%, rgba(25, 25, 25, 1) 100%);
+    background: -webkit-linear-gradient(top, rgba(25, 25, 25, 1) 1%, rgba(35, 35, 35, 1) 31%, rgba(35, 35, 35, 1) 70%, rgba(25, 25, 25, 1) 100%);
+    background: linear-gradient(to bottom, rgba(25, 25, 25, 1) 1%, rgba(35, 35, 35, 1) 31%, rgba(35, 35, 35, 1) 70%, rgba(25, 25, 25, 1) 100%);
+    filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#191919', endColorstr='#191919', GradientType=0);
+    display: flex;
+    justify-content: center;
+}
+
+.centerHorz {
+    display: flex;
+    justify-content: center;
+}
+
+.centerVert {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.loadingGif {
+    margin: 0 auto;
+    width: 200px;
+    height: 150px;
+}
+
+#logo{
+    margin: 0 auto;
+    height: 40px;
+}

@@ -118,7 +118,6 @@ function gameLoop() {
 socket.on("worldData", function (worldData) {
     world = worldData;
     gameLoop();
-    socket.emit("spawn");
 });
 
 socket.on("worldUpdate", function (worldData) {
