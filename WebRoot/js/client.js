@@ -15,10 +15,37 @@ socket.on('connect', function () {
 
     }
     $("#loginLink").trigger("click");
+    socket.emit("getSkins");
 });
 
-
+socket.on("getSkins", function (skinUrls) {
+    //populate list
+    $("#skinList").html("");
+    for (i in skinUrls) {
+        var skinUrl = skinUrls[i];
+        var elem = $("#skin0").clone().appendTo("#skinList");
+        $(elem).attr("id", "");
+        $(elem).find('.skinImage').attr("src", skinUrl);
+        $(elem).find('.skinImage').click(selectedSkin);
+        $(elem).show(400);
+    }
+});
+var Themes = {};
+socket.on("getThemes", function (newThemes) {
+    //populate list
+    Themes = newThemes;
+    loadThemeData();
+});
+function getThemes() {
+    socket.emit("getThemes", Themes);
+}
+getThemes();
 function spawnButton() {
     socket.emit("spawn");
     $("#closeMenu").trigger("click");
+}
+
+function selectedSkin() {
+    $("#mainMenuSkinImage").attr('src', this.src);
+    socket.emit("setProfilePictureUrl", this.src);
 }

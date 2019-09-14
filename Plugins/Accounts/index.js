@@ -242,37 +242,47 @@ function init(plugins, settings, events, io, log, commands) {
 
             }
         });
-
         socket.on("changeProfilePicture", function (imageData) {
-            var pMime = base64MimeType(imageData);
-            var imgExt = ""
-            if (pMime == "image/png") {
-                imgExt = ".png"
-                imageData = imageData.replace(/^data:image\/png;base64,/, "");
-            } else if (pMime == "image/jpeg") {
-                imgExt = ".jpg"
-                imageData = imageData.replace(/^data:image\/jpeg;base64,/, "");
-            } else if (pMime == "image/gif") {
-                imgExt = ".gif"
-                imageData = imageData.replace(/^data:image\/gif;base64,/, "");
-            } else {
-                socket.emit("changeProfilePicture");
-                return;
-            }
-            var newPhotoPath = "/img/profilePics/" + socket.username + imgExt
-            fs.writeFile(settings.webRoot + newPhotoPath, imageData, 'base64', function (err) {
-                if (err) {
-                    socket.emit("changeProfilePicture");
+            if (socket.isLoggedIn) {
+                var pMime = base64MimeType(imageData);
+                var imgExt = ""
+                if (pMime == "image/png") {
+                    imgExt = ".png"
+                    imageData = imageData.replace(/^data:image\/png;base64,/, "");
+                } else if (pMime == "image/jpeg") {
+                    imgExt = ".jpg"
+                    imageData = imageData.replace(/^data:image\/jpeg;base64,/, "");
+                } else if (pMime == "image/gif") {
+                    imgExt = ".gif"
+                    imageData = imageData.replace(/^data:image\/gif;base64,/, "");
                 } else {
-                    socket.emit("changeProfilePicture", newPhotoPath);
-                    log("Profile picture updated for '" + socket.email + "'.", false, "Accounts");
-                    Accounts[socket.email].profilePicture = newPhotoPath;
-                    socket.profilePicture = newPhotoPath;
-                    DB.save(accountDBPath, Accounts);
-                    exports.Accounts = Accounts;
+                    socket.emit("changeProfilePicture");
+                    return;
                 }
-            });
-
+                var newPhotoPath = "/img/profilePics/" + socket.username + imgExt
+                fs.writeFile(settings.webRoot + newPhotoPath, imageData, 'base64', function (err) {
+                    if (err) {
+                        socket.emit("changeProfilePicture");
+                    } else {
+                        socket.emit("changeProfilePicture", newPhotoPath);
+                        log("Profile picture updated for '" + socket.email + "'.", false, "Accounts");
+                        Accounts[socket.email].profilePicture = newPhotoPath;
+                        socket.profilePicture = newPhotoPath;
+                        DB.save(accountDBPath, Accounts);
+                        exports.Accounts = Accounts;
+                    }
+                });
+            }
+        });
+        socket.on("setProfilePictureUrl", function (newPhotoPath) {
+            if (socket.isLoggedIn) {
+                socket.emit("changeProfilePicture", newPhotoPath);
+                log("Profile picture updated for '" + socket.email + "'.", false, "Accounts");
+                Accounts[socket.email].profilePicture = newPhotoPath;
+                socket.profilePicture = newPhotoPath;
+                DB.save(accountDBPath, Accounts);
+                exports.Accounts = Accounts;
+            }
         });
     });
 }

@@ -1,19 +1,24 @@
 //Authour: Dustin Harris
 //GitHub: https://github.com/DevL0rd
-
+var io;
+var log;
+var serverSettings;
+const readdirp = require('readdirp');
+var fs = require('fs');
+var DB = require('../../Devlord_modules/DB.js');
 var world = {
     cells: {},
     cellTypes: { food: 1, player: 2 },
     travelSpeed: 50,
-    speedDecreaseScalar: 0.5,
+    speedDecreaseScalar: 0.1,
     globalFriction: 0.5,
-    radiusScalar: 0.3,
+    radiusScalar: 20,
     massDecay: 0.01,
     minMass: 20,
-    playerSpawnSize: 50,
+    playerSpawnSize: 120,
     forceCutOff: 0.05,
-    width: 5000,
-    height: 5000,
+    width: 15000,
+    height: 15000,
     foodCount: 0,
     maxFoodCount: 5000,
     foodSpawnSpeed: 100,
@@ -21,6 +26,9 @@ var world = {
     minFoodSize: 3,
     maxFoodSize: 7
 };
+
+
+
 var players = {};
 var updatedCells = [];
 var removedCells = [];
@@ -58,6 +66,7 @@ function updateCell(cell) {
         updatePosition(cell);
     }
 }
+
 function foodTick() {
     var spawnCount = world.foodSpawnAmount;
     while (spawnCount > 0 && world.foodCount < world.maxFoodCount) {
@@ -69,7 +78,7 @@ function foodTick() {
 function spawnRandomFoodCell() {
     var foodSize = getRandomInt(world.minFoodSize, world.maxFoodSize);
     var spawnPos = getRandomSpawn(foodSize);
-    addCell(spawnPos.x, spawnPos.y, foodSize);
+    addCell(spawnPos.x, spawnPos.y, foodSize, "transparent");
     world.foodCount++;
 }
 
@@ -190,7 +199,7 @@ function handleCellToCellCollision(cellPair) {
     if (cellPair.cellA.mass > cellPair.cellB.mass && cellPair.cellA.type === world.cellTypes.player) {
         //if cell is halfway over the target cell.
 
-        var eatDepth = cellPair.cellA.radius + (cellPair.cellB.radius / 2);
+        var eatDepth = cellPair.cellA.radius + cellPair.cellB.radius / 2;
         if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
             addMass(cellPair.cellA, cellPair.cellB.mass);
             cellPair.cellB.mass = 0; //prevent double mass gain
@@ -198,8 +207,8 @@ function handleCellToCellCollision(cellPair) {
         }
     } else if (cellPair.cellB.type === world.cellTypes.player) {
         //if cell is halfway over the target cell.
-        var radiusAdded = (cellPair.cellA.radius / 2) + cellPair.cellB.radius;
-        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= radiusAdded) {
+        var eatDepth = cellPair.cellA.radius / 2 + cellPair.cellB.radius;
+        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
             addMass(cellPair.cellB, cellPair.cellA.mass);
             cellPair.cellA.mass = 0; //prevent double mass gain
             removeCell(cellPair.cellA);
@@ -213,7 +222,7 @@ function handleCellToWallCollision(cellCollisions) {
         cellCollision.cell.position[cellCollision.axis] -= cellCollision.collisionDepth;
     }
 }
-function addCell(x, y, mass, type = world.cellTypes.food, playerId) {
+function addCell(x, y, mass, color, type = world.cellTypes.food, socket) {
     var nCell = {};
     nCell.type = type;
     nCell.position = {
@@ -227,17 +236,21 @@ function addCell(x, y, mass, type = world.cellTypes.food, playerId) {
     };
     nCell.angle = 0;
     nCell.graphics = {
-        color: "rgb(0,255,255)"
+        color: color
     };
     setMass(nCell, mass);
     nCell.id = generateId();
-    if (playerId) {
-        nCell.playerId = playerId;
-        if (!players[playerId]) {
-            players[playerId] = { cells: {} };
+    if (socket) {
+        nCell.playerId = socket.playerId;
+        if (!players[socket.playerId]) {
+            players[socket.playerId] = { cells: {} };
         }
         //addplayer cell to list
-        players[playerId].cells[nCell.id] = true;
+        players[socket.playerId].cells[nCell.id] = true;
+        if (socket.profilePicture != "/img/profilePics/noprofilepic.jpg") {
+            nCell.graphics.texture = socket.profilePicture;
+        }
+        nCell.name = socket.username;
     }
     world.cells[nCell.id] = nCell;
     updatedCells.push(nCell);
@@ -273,7 +286,11 @@ function splitCell(cell) {
     if (newCellMass >= world.minMass) {
         setMass(cell, newCellMass);
         var spawnPos = findNewPoint(cell.position, cell.angle, (cell.radius * 2) + 5);
-        var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, world.cellTypes.player, cell.playerId);
+        if (players[cell.playerId]) {
+            var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, cell.graphics.color, world.cellTypes.player, players[cell.playerId].socket);
+        } else {
+            var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, cell.graphics.color, world.cellTypes.player);
+        }
         nCell.angle = cell.angle;
         setForce(nCell, nCell.angle, cell.speed + 50);
     }
@@ -313,55 +330,16 @@ function sendPlayerFocusedCell(playerId) {
 function spawnPlayer(socket) {
     var spawnPos = getRandomSpawn(50);
     socket.playerId = generateId();
-    var playerCell = addCell(spawnPos.x, spawnPos.y, world.playerSpawnSize, world.cellTypes.player, socket.playerId);
+    var playerCell = addCell(spawnPos.x, spawnPos.y, world.playerSpawnSize, "blue", world.cellTypes.player, socket);
     players[socket.playerId].socket = socket;
     players[socket.playerId].focusedCellId = playerCell.id;
     sendPlayerFocusedCell(playerCell.playerId);
     sendPlayersCells(playerCell.playerId);
+    log("Player '" + socket.username + "' has spawned!", false, "Osmosis");
     return playerCell;
 }
 
-function init(plugins, settings, events, io, log, commands) {
-    function gameLoop() {
-        loopStart();
-        foodTick();
-        updateCells();
-        //send updates to client
-        io.emit("worldUpdate", { updatedCells: updatedCells, removedCells: removedCells });
-        updatedCells = [];
-        removedCells = [];
-        var elapsedTime = loopEnd();
-        //console.log(elapsedTime);
 
-        //keep updates to client steady
-        setTimeout(gameLoop, 40);
-    }
-    gameLoop();
-    events.on("connection", function (socket) {
-        socket.emit("worldData", world);
-        socket.on("disconnect", function () {
-            //make sure user is playing
-            if (socket.playerId) {
-                removePlayer(socket.playerId);
-            }
-        });
-        socket.on("mouseMove", function (mousePos) {
-            //validate input and make sure user is playing
-            if (socket.playerId && mousePos && mousePos.y && mousePos.x) {
-                playerOnMouseMove(socket.playerId, mousePos);
-            }
-        });
-        socket.on("split", function () {
-            //make sure user is playing
-            if (socket.playerId) {
-                playerOnSplit(socket.playerId);
-            }
-        });
-        socket.on("spawn", function () {
-            var playerCell = spawnPlayer(socket);
-        });
-    });
-}
 function testCellCollision(testCell) {
     for (i in world.cells) {
         var cell = world.cells[i];
@@ -473,7 +451,7 @@ function addMass(cell, mass) {
 function setMass(cell, mass) {
     cell.mass = mass;
     cell.radius = Math.sqrt(cell.mass * world.radiusScalar);
-    cell.speed = (world.travelSpeed / (mass * world.speedDecreaseScalar)) * world.travelSpeed;
+    cell.speed = (world.travelSpeed / Math.sqrt(mass * world.speedDecreaseScalar)) * world.travelSpeed;
 }
 
 function generateId() {
@@ -482,5 +460,123 @@ function generateId() {
         return (Math.random() * 16 | 0).toString(16);
     }).toLowerCase();
 }
+
+function gameLoop() {
+    loopStart();
+    foodTick();
+    updateCells();
+    //send updates to client
+    io.emit("worldUpdate", { updatedCells: updatedCells, removedCells: removedCells });
+    updatedCells = [];
+    removedCells = [];
+    var elapsedTime = loopEnd();
+    //console.log(elapsedTime);
+
+    //keep updates to client steady
+    setTimeout(gameLoop, 40);
+}
+
+function fillWorldWithFood() {
+    log("Filling world with food...", false, "Osmosis");
+    while (world.foodCount < world.maxFoodCount) {
+        spawnRandomFoodCell();
+    }
+    log("Food spawning complete!", false, "Osmosis");
+}
+
+function init(plugins, servSettings, events, serverio, serverLog, commands) {
+    io = serverio;
+    log = serverLog;
+    serverSettings = servSettings;
+
+    log("Starting game engine...", false, "Osmosis");
+    loadSkins();
+    loadThemes();
+    fillWorldWithFood();
+    gameLoop();
+    log("Engine running!", false, "Osmosis");
+
+    events.on("connection", function (socket) {
+        socket.emit("worldData", world);
+        socket.on("disconnect", function () {
+            //make sure user is playing
+            if (socket.playerId) {
+                removePlayer(socket.playerId);
+            }
+        });
+        socket.on("mouseMove", function (mousePos) {
+            //validate input and make sure user is playing
+            if (socket.playerId && mousePos && mousePos.y && mousePos.x) {
+                playerOnMouseMove(socket.playerId, mousePos);
+            }
+        });
+        socket.on("split", function () {
+            //make sure user is playing
+            if (socket.playerId) {
+                playerOnSplit(socket.playerId);
+            }
+        });
+        socket.on("spawn", function () {
+            var playerCell = spawnPlayer(socket);
+        });
+        socket.on("getSkins", function () {
+            socket.emit("getSkins", skinUrls);
+        });
+        socket.on("getThemes", function () {
+            socket.emit("getThemes", Themes);
+        });
+
+    });
+    commands.reloadThemes = {
+        usage: "reloadThemes",
+        help: "Reloads the themes for osmosis.",
+        do: function (args, fullMessage) {
+            loadThemes();
+        }
+    }
+    commands.reloadSkins = {
+        usage: "reloadSkins",
+        help: "Reloads the skins for osmosis.",
+        do: function (args, fullMessage) {
+            loadSkins();
+        }
+    }
+}
+var Themes = {};
+function loadThemes() {
+    log("Loading themes...", false, "Osmosis");
+    var ThemesPath = __dirname + "/Themes.json";
+    if (fs.existsSync(ThemesPath)) {
+        Themes = DB.load(ThemesPath);
+    } else {
+        Themes = {
+            "Osmosis": {
+                "cellBorderTexture": { "src": "/img/themes/Osmosis/seemlessWater.jpg" },
+                "foodBorderTexture": { "src": "/img/themes/Osmosis/seemlessSpace.jpg" }
+            }
+        }
+        DB.save(ThemesPath, Themes);
+        log("Themes file not found, generating dafults...", false, "Osmosis");
+    }
+    io.emit("getThemes", Themes);
+    log("Themes loaded!", false, "Osmosis");
+}
+var skinUrls = [];
+function loadSkins() {
+    log("Loading skins...", false, "Osmosis");
+    skinUrls = [];
+    readdirp(serverSettings.webRoot + "/img/skins/", {
+        type: 'files',
+        fileFilter: ['*.png'],
+        directoryFilter: ['!.git'],
+        depth: 2
+    }).on('data', (fileInfo) => {
+        skinUrls.push("./img/skins/" + fileInfo.path);
+    }).on('end', () => {
+        io.emit("getSkins", skinUrls);
+        log("Skins loaded! Found " + skinUrls.length + " skins.", false, "Osmosis");
+    });
+}
+
 
 module.exports.init = init;

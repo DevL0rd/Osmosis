@@ -21,7 +21,7 @@ socket.on('loginResponse', function (res) {
         localStorage.username = res.username;
         $("#profilePic").attr('src', res.profilePicture);
         $("#loginImg").attr('src', res.profilePicture);
-        $("#profileImg").attr('src', res.profilePicture); //profile editor
+        $("#mainMenuSkinImage").attr('src', res.profilePicture); //Main menu image
         $("#loginLink").hide();
         $("#loginInputs").hide(400);
         $("#loginGreeting").html("<h1>Welcome Back!</h1>");
@@ -252,6 +252,7 @@ function submitProfilePicture() {
         socket.emit("changeProfilePicture", b64);
     });
 }
+
 socket.on("changeProfilePicture", function (newPic) {
     if (newPic) {
         $("#profilePic").attr('src', newPic);

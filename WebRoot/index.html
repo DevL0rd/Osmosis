@@ -55,15 +55,21 @@
     </div>
     <div id="mainMenu" class="modal fade text-center">
         <div class="modal-dialog">
-            <div class="modal-content modalPanel">
+            <div class="modal-content modalPanelMainMenu">
+                <div class="login-user-img">
+                    <img id="mainMenuSkinImage" src="img/profilePics/noprofilepic.jpg">
+                </div>
                 <img id="logo" src="img/logo_White.png">
                 <button id="closeMenu" type="button" class="close closeModal" data-dismiss="modal">
                     <i class="fas fa-times"></i>
                 </button>
                 <br>
-                <div id="skinList">
-
+                <span id="skin0" class="skin" style="display:none;">
+                    <img class="skinImage" src="img/profilePics/noprofilepic.jpg">
+                </span>
+                <div id="skinList" class="customScroll">
                 </div>
+                <br>
                 <div id="menuInputs" class="form-input">
                     <button id="spawn_button" type="submit" class="btn btn-success" onclick="spawnButton()">Eat Some
                         Balls</button>

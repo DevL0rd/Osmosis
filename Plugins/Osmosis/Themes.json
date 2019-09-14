@@ -1,0 +1,10 @@
+{
+	"Osmosis": {
+		"cellBorderTexture": {
+			"src": "/img/themes/Osmosis/seemlessWater.jpg"
+		},
+		"foodBorderTexture": {
+			"src": "/img/themes/Osmosis/seemlessSpace.jpg"
+		}
+	}
+}

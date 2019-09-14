@@ -1,7 +1,8 @@
 {
     "dependencies": {
         "bcryptjs": "latest",
-        "mkdirp": "latest"
+        "mkdirp": "latest",
+        "readdirp": "latest"
     },
     "author": {
         "name": "Dustin Harris",

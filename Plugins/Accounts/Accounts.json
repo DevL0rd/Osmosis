@@ -3,16 +3,24 @@
 		"username": "test",
 		"password": "$2a$08$i4xrO85KVF046/VCJLvtNOtiy0ZrWTYPec0y7JSkqTt49x8hXtKV2",
 		"accountCreationTS": 1568315571343,
-		"profilePicture": "/img/profilePics/noprofilepic.jpg",
+		"profilePicture": "http://localhost/img/skins/decepticon.png",
 		"loginKeys": {
-			"d6b2f056954ccd5a94393d3c562e32ec7771c6d768d0b436894a7c5ac7e20112": {
+			"fdb9cf477e657d496758891b339a44d64b253c43f7086473f6c2dd9361013579": {
 				"ip": "127.0.0.1",
-				"timeout": 1569180529859
+				"timeout": 1569289339647
+			},
+			"2094e5e6f3fb7c4ab45df86978859ea658aa21f89fde9456d1b5c774bdee3529": {
+				"ip": "127.0.0.1",
+				"timeout": 1569291885943
+			},
+			"932cafde26cba8ae7b385b2db691d6300dab1bc926ac66d998e257b3539aec8a": {
+				"ip": "127.0.0.1",
+				"timeout": 1569291886222
 			}
 		},
 		"permissionGroups": [],
 		"permissions": [],
 		"lastIp": "127.0.0.1",
-		"lastLoginTS": 1568316529859
+		"lastLoginTS": 1568427886222
 	}
 }
