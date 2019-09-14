@@ -9,7 +9,7 @@ var DB = require('../../Devlord_modules/DB.js');
 var world = {
     cells: {},
     cellTypes: { food: 1, player: 2 },
-    travelSpeed: 50,
+    travelSpeed: 30,
     speedDecreaseScalar: 0.1,
     globalFriction: 0.5,
     radiusScalar: 20,
@@ -24,7 +24,8 @@ var world = {
     foodSpawnSpeed: 100,
     foodSpawnAmount: 1,
     minFoodSize: 3,
-    maxFoodSize: 7
+    maxFoodSize: 7,
+    mergeDelayScalar: 20
 };
 
 
@@ -89,6 +90,7 @@ function applyGlobalFriction(cell) {
 }
 function updatePosition(cell) {
     if (cell.force.x === 0 && cell.force.y === 0) return false;
+    cell.lastPosition = Object.assign(cell.position, {});
     cell.position.x += cell.force.x * delta;
     cell.position.y += cell.force.y * delta;
     updatedCells.push(cell);
@@ -196,22 +198,39 @@ function detectCellToWallCollision(cell) {
 }
 
 function handleCellToCellCollision(cellPair) {
+    var mNow = Date.now();
     if (cellPair.cellA.mass > cellPair.cellB.mass && cellPair.cellA.type === world.cellTypes.player) {
         //if cell is halfway over the target cell.
-
-        var eatDepth = cellPair.cellA.radius + cellPair.cellB.radius / 2;
-        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
-            addMass(cellPair.cellA, cellPair.cellB.mass);
-            cellPair.cellB.mass = 0; //prevent double mass gain
-            removeCell(cellPair.cellB);
+        if (cellPair.cellB.mergeTime <= mNow) {
+            var eatDepth = cellPair.cellA.radius + cellPair.cellB.radius / 2;
+            if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
+                addMass(cellPair.cellA, cellPair.cellB.mass);
+                cellPair.cellB.mass = 0; //prevent double mass gain
+                removeCell(cellPair.cellB);
+            }
+        } else {
+            var collideDepth = cellPair.cellA.radius + cellPair.cellB.radius;
+            if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= collideDepth) {
+                cellPair.cellA.position = Object.assign(cellPair.cellA.lastPosition, {});
+                cellPair.cellB.position = Object.assign(cellPair.cellB.lastPosition, {});
+            }
         }
     } else if (cellPair.cellB.type === world.cellTypes.player) {
         //if cell is halfway over the target cell.
-        var eatDepth = cellPair.cellA.radius / 2 + cellPair.cellB.radius;
-        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
-            addMass(cellPair.cellB, cellPair.cellA.mass);
-            cellPair.cellA.mass = 0; //prevent double mass gain
-            removeCell(cellPair.cellA);
+        if (cellPair.cellA.mergeTime <= mNow) {
+            var eatDepth = cellPair.cellA.radius / 2 + cellPair.cellB.radius;
+            if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
+                addMass(cellPair.cellB, cellPair.cellA.mass);
+                cellPair.cellA.mass = 0; //prevent double mass gain
+                removeCell(cellPair.cellA);
+            }
+        } else {
+
+            var collideDepth = cellPair.cellA.radius + cellPair.cellB.radius;
+            if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= collideDepth) {
+                cellPair.cellA.position = Object.assign(cellPair.cellA.lastPosition, {});
+                cellPair.cellB.position = Object.assign(cellPair.cellB.lastPosition, {});
+            }
         }
     }
 }
@@ -235,6 +254,7 @@ function addCell(x, y, mass, color, type = world.cellTypes.food, socket) {
         y: 0
     };
     nCell.angle = 0;
+    nCell.mergeTime = 0;
     nCell.graphics = {
         color: color
     };
@@ -288,6 +308,8 @@ function splitCell(cell) {
         var spawnPos = findNewPoint(cell.position, cell.angle, (cell.radius * 2) + 5);
         if (players[cell.playerId]) {
             var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, cell.graphics.color, world.cellTypes.player, players[cell.playerId].socket);
+            nCell.mergeTime = Date.now() + (cell.mass * world.mergeDelayScalar);
+            cell.mergeTime = Date.now() + (cell.mass * world.mergeDelayScalar);
         } else {
             var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, cell.graphics.color, world.cellTypes.player);
         }
@@ -390,9 +412,6 @@ function getLargestCell(cells) {
 function getDistanceBetweenCells(cellA, cellB) {
     return getDistance(cellA.position, cellB.position);
 }
-
-
-
 function getDistance(pos1, pos2) {
     var a = pos1.x - pos2.x;
     var b = pos1.y - pos2.y;
@@ -551,8 +570,15 @@ function loadThemes() {
     } else {
         Themes = {
             "Osmosis": {
-                "cellBorderTexture": { "src": "/img/themes/Osmosis/seemlessWater.jpg" },
-                "foodBorderTexture": { "src": "/img/themes/Osmosis/seemlessSpace.jpg" }
+                "cellBorderTexture": {
+                    "src": "/img/themes/Osmosis/seemlessSpace.jpg"
+                },
+                "foodBorderTexture": {
+                    "src": "/img/themes/Osmosis/seemlessWater.jpg"
+                },
+                "bubbleBorderTexture": {
+                    "src": "/img/themes/Osmosis/seemlessRainbow.jpg"
+                }
             }
         }
         DB.save(ThemesPath, Themes);

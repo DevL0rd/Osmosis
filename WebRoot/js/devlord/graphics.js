@@ -28,16 +28,24 @@ Graphics.newGraphicsObj = function (canvasID, context, nWidth, nHeight, funcRend
 	newGraphicsOBJ.RenderFrame = funcRenderFrame;
 	newGraphicsOBJ.context.camerPos = { x: 0, y: 0 };
 	newGraphicsOBJ.context.translation = { x: 0, y: 0 };
+	newGraphicsOBJ.context.zoom = 1;
+	newGraphicsOBJ.context.zoomTo = function (zoom) {
+		newGraphicsOBJ.context.zoom = zoom;
+		//newGraphicsOBJ.context.moveCameraTo(newGraphicsOBJ.context.camerPos)
+	};
 	newGraphicsOBJ.context.moveCameraTo = function (pos) {
+		newGraphicsOBJ.context.scale(newGraphicsOBJ.context.zoom, newGraphicsOBJ.context.zoom);
 		newGraphicsOBJ.context.camerPos = {
 			x: pos.x,
 			y: pos.y
 		};
+		var tx = -pos.x + (this.canvas.width / (newGraphicsOBJ.context.zoom * 2))
+		var ty = -pos.y + (this.canvas.height / (newGraphicsOBJ.context.zoom * 2))
 		newGraphicsOBJ.context.translation = {
-			x: -pos.x + this.canvas.width / 2,
-			y: -pos.y + this.canvas.height / 2
+			x: tx,
+			y: ty
 		};
-		this.translate(-pos.x + this.canvas.width / 2, -pos.y + this.canvas.height / 2);
+		this.translate(tx, ty);
 	};
 	Graphics.init(newGraphicsOBJ);
 };
