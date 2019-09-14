@@ -52,21 +52,37 @@ function updateCells() {
         var cell = world.cells[i];
         //Server side only
         updateCell(cell);
+
     }
     resolveCollisions();
 }
 function updateCell(cell) {
     if (cell.type === world.cellTypes.player) {
+        //Server side only
         updateMass(cell);
-        //set the forces on the cell to keep it moving;
-        setForce(cell, cell.angle, cell.speed);
+        var dist = (cell.distToMouse - cell.radius);
+        if (dist > 1) {
+            //set the forces on the cell to keep it moving;
+            applyGlobalFriction(cell);
+            var dSpeedScalar = (dist / 200);
+            if (dSpeedScalar > 2) dSpeedScalar = 2;
+            // if (dSpeedScalar < 1) dSpeedScalar = 1;
+            var nSpeed = cell.speed * dSpeedScalar;
+        } else {
+            var nSpeed = 0;
+        }
+        setForce(cell, cell.angle, nSpeed);
     }
-    if (isMoving(cell)) {
-        applyGlobalFriction(cell);
+    if (isMoving(cell) || cell.type === world.cellTypes.player) {
+        if (cell.type != world.cellTypes.player) {
+            applyGlobalFriction(cell);
+        }
         applyForceCutoff(cell);
         updatePosition(cell);
     }
 }
+
+
 
 function foodTick() {
     var spawnCount = world.foodSpawnAmount;
@@ -85,9 +101,19 @@ function spawnRandomFoodCell() {
 
 
 function applyGlobalFriction(cell) {
-    cell.force.x -= (cell.force.x * world.globalFriction) * delta;
-    cell.force.y -= (cell.force.y * world.globalFriction) * delta;
+    if (cell.type === world.cellTypes.player) {
+        var defaultSpeed = (world.travelSpeed / Math.sqrt(cell.mass * world.speedDecreaseScalar)) * world.travelSpeed;
+        if (cell.speed < defaultSpeed) {
+            cell.speed = defaultSpeed;
+        } else {
+            cell.speed -= (cell.speed * world.globalFriction) * delta;
+        }
+    } else {
+        cell.force.x -= (cell.force.x * world.globalFriction) * delta;
+        cell.force.y -= (cell.force.y * world.globalFriction) * delta;
+    }
 }
+
 function updatePosition(cell) {
     if (cell.force.x === 0 && cell.force.y === 0) return false;
     cell.lastPosition = Object.assign(cell.position, {});
@@ -249,6 +275,7 @@ function addCell(x, y, mass, color, type = world.cellTypes.food, socket) {
         y: y
     };
     nCell.lastPosition = Object.assign(nCell.position, {});
+    nCell.speed = 0;
     nCell.force = {
         x: 0,
         y: 0
@@ -271,6 +298,7 @@ function addCell(x, y, mass, color, type = world.cellTypes.food, socket) {
             nCell.graphics.texture = socket.profilePicture;
         }
         nCell.name = socket.username;
+        nCell.distToMouse = 0;
     }
     world.cells[nCell.id] = nCell;
     updatedCells.push(nCell);
@@ -305,7 +333,7 @@ function splitCell(cell) {
     var newCellMass = cell.mass / 2;
     if (newCellMass >= world.minMass) {
         setMass(cell, newCellMass);
-        var spawnPos = findNewPoint(cell.position, cell.angle, (cell.radius * 2) + 5);
+        var spawnPos = findNewPoint(cell.position, cell.angle, (cell.radius * 2) + 1);
         if (players[cell.playerId]) {
             var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, cell.graphics.color, world.cellTypes.player, players[cell.playerId].socket);
             nCell.mergeTime = Date.now() + (cell.mass * world.mergeDelayScalar);
@@ -313,8 +341,8 @@ function splitCell(cell) {
         } else {
             var nCell = addCell(spawnPos.x, spawnPos.y, newCellMass, cell.graphics.color, world.cellTypes.player);
         }
-        nCell.angle = cell.angle;
-        setForce(nCell, nCell.angle, cell.speed + 50);
+        nCell.angle = getAngle(nCell.position, cell.mousePos);
+        nCell.speed = cell.speed * 2
     }
 }
 
@@ -333,6 +361,8 @@ function playerOnMouseMove(playerId, mousePos) {
         var cell = pCells[i];
         //set the angle of each cell to follow the mouse
         cell.angle = getAngle(cell.position, mousePos);
+        cell.mousePos = mousePos;
+        cell.distToMouse = getDistance(cell.position, mousePos);
     }
 }
 
@@ -470,7 +500,6 @@ function addMass(cell, mass) {
 function setMass(cell, mass) {
     cell.mass = mass;
     cell.radius = Math.sqrt(cell.mass * world.radiusScalar);
-    cell.speed = (world.travelSpeed / Math.sqrt(mass * world.speedDecreaseScalar)) * world.travelSpeed;
 }
 
 function generateId() {

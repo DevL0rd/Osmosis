@@ -1,6 +1,6 @@
 
 var gDebug = true;
-
+var debugCulling = false;
 Graphics.newGraphicsObj("gameCanvas", "2d", window.innerWidth, window.innerHeight, renderFrame, onResize, gDebug);
 
 var currentTheme = "Osmosis"
@@ -75,7 +75,7 @@ function renderCells(cells, context) {
         if (cell.position.x + zRad + canvasTranslation.x > 0 && cell.position.x - zRad + canvasTranslation.x < window.innerWidth / context.zoom) {
             if (cell.position.y + canvasTranslation.y > 0 && cell.position.y + canvasTranslation.y < + window.innerHeight / context.zoom) {
                 renderCell(cell, context);
-            } else if (gDebug) {
+            } else if (gDebug && debugCulling) {
                 context.beginPath();
                 context.moveTo(cell.position.x, cell.position.y - zRad - 50);
                 context.lineTo(cell.position.x, cell.position.y + zRad + 50);
@@ -84,7 +84,7 @@ function renderCells(cells, context) {
                 context.stroke();
                 context.closePath();
             }
-        } else if (gDebug) {
+        } else if (gDebug && debugCulling) {
             context.beginPath();
             context.moveTo(cell.position.x - zRad - 50, cell.position.y);
             context.lineTo(cell.position.x + zRad + 50, cell.position.y);
@@ -237,11 +237,7 @@ function checkCollision(bubbleA, bubbleB) {
         return false;
     }
 }
-function getDistance(pos1, pos2) {
-    var a = pos1.x - pos2.x;
-    var b = pos1.y - pos2.y;
-    return Math.sqrt(a * a + b * b);
-}
+
 function renderLoginCanvas(canvas, context) {
     if ($("#login").is(":visible")) {
         bubbleLoopStart();

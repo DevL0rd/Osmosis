@@ -1,6 +1,42 @@
 //Authour: DevL0rd
 //GitHub: https://github.com/DevL0rd
+EasingFunctions = {
+	// no easing, no acceleration
+	linear: function (t) { return t },
+	// accelerating from zero velocity
+	easeInQuad: function (t) { return t * t },
+	// decelerating to zero velocity
+	easeOutQuad: function (t) { return t * (2 - t) },
+	// acceleration until halfway, then deceleration
+	easeInOutQuad: function (t) { return t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t },
+	// accelerating from zero velocity 
+	easeInCubic: function (t) { return t * t * t },
+	// decelerating to zero velocity 
+	easeOutCubic: function (t) { return (--t) * t * t + 1 },
+	// acceleration until halfway, then deceleration 
+	easeInOutCubic: function (t) { return t < .5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1 },
+	// accelerating from zero velocity 
+	easeInQuart: function (t) { return t * t * t * t },
+	// decelerating to zero velocity 
+	easeOutQuart: function (t) { return 1 - (--t) * t * t * t },
+	// acceleration until halfway, then deceleration
+	easeInOutQuart: function (t) { return t < .5 ? 8 * t * t * t * t : 1 - 8 * (--t) * t * t * t },
+	// accelerating from zero velocity
+	easeInQuint: function (t) { return t * t * t * t * t },
+	// decelerating to zero velocity
+	easeOutQuint: function (t) { return 1 + (--t) * t * t * t * t },
+	// acceleration until halfway, then deceleration 
+	easeInOutQuint: function (t) { return t < .5 ? 16 * t * t * t * t * t : 1 + 16 * (--t) * t * t * t * t }
+}
+
+function getDistance(pos1, pos2) {
+	var a = pos1.x - pos2.x;
+	var b = pos1.y - pos2.y;
+	return Math.sqrt(a * a + b * b);
+}
 var Graphics = {};
+var ct = 0;
+var zt = 0;
 Graphics.newGraphicsObj = function (canvasID, context, nWidth, nHeight, funcRenderFrame, funcResize, dbg = false) {
 	var newGraphicsOBJ = {};
 	newGraphicsOBJ.debugenabled = dbg;
@@ -26,26 +62,55 @@ Graphics.newGraphicsObj = function (canvasID, context, nWidth, nHeight, funcRend
 	newGraphicsOBJ.canvas.width = nWidth;
 	newGraphicsOBJ.canvas.height = nHeight;
 	newGraphicsOBJ.RenderFrame = funcRenderFrame;
-	newGraphicsOBJ.context.camerPos = { x: 0, y: 0 };
+	newGraphicsOBJ.context.cameraPos = { x: 0, y: 0 };
+	newGraphicsOBJ.context.lastCameraPos = { x: 0, y: 0 };
 	newGraphicsOBJ.context.translation = { x: 0, y: 0 };
 	newGraphicsOBJ.context.zoom = 1;
+	newGraphicsOBJ.context.lastZoom = 1;
 	newGraphicsOBJ.context.zoomTo = function (zoom) {
-		newGraphicsOBJ.context.zoom = zoom;
-		//newGraphicsOBJ.context.moveCameraTo(newGraphicsOBJ.context.camerPos)
+		if (zoom != newGraphicsOBJ.context.zoom) {
+			var eZ = newGraphicsOBJ.context.lastZoom + (zoom - newGraphicsOBJ.context.lastZoom) * EasingFunctions.easeInOutQuad(zt);
+			newGraphicsOBJ.context.zoom = eZ;
+			if (zt < 1) {
+				zt += 0.01;
+			} else {
+				zt = 0;
+				newGraphicsOBJ.context.lastZoom = newGraphicsOBJ.context.zoom;
+			}
+		} else {
+			zt = 0;
+			newGraphicsOBJ.context.lastZoom = newGraphicsOBJ.context.zoom;
+		}
+
+		//newGraphicsOBJ.context.moveCameraTo(newGraphicsOBJ.context.cameraPos)
 	};
 	newGraphicsOBJ.context.moveCameraTo = function (pos) {
 		newGraphicsOBJ.context.scale(newGraphicsOBJ.context.zoom, newGraphicsOBJ.context.zoom);
-		newGraphicsOBJ.context.camerPos = {
-			x: pos.x,
-			y: pos.y
+		// var eX = EasingFunctions.easeInOutQuad(t) * pos.x;
+		var eX = newGraphicsOBJ.context.lastCameraPos.x + (pos.x - newGraphicsOBJ.context.lastCameraPos.x) * EasingFunctions.easeInOutQuad(ct);
+		// var eY = EasingFunctions.easeInOutQuad(t) * pos.y;
+		var eY = newGraphicsOBJ.context.lastCameraPos.y + (pos.y - newGraphicsOBJ.context.lastCameraPos.y) * EasingFunctions.easeInOutQuad(ct);
+		newGraphicsOBJ.context.cameraPos = {
+			x: eX,
+			y: eY
 		};
-		var tx = -pos.x + (this.canvas.width / (newGraphicsOBJ.context.zoom * 2))
-		var ty = -pos.y + (this.canvas.height / (newGraphicsOBJ.context.zoom * 2))
+		var tx = -eX + (this.canvas.width / (newGraphicsOBJ.context.zoom * 2))
+		var ty = -eY + (this.canvas.height / (newGraphicsOBJ.context.zoom * 2))
 		newGraphicsOBJ.context.translation = {
 			x: tx,
 			y: ty
 		};
+		if (ct > 1) {
+			ct = 1;
+		}
+		if (ct < 1) {
+			ct += 0.005;
+		} else if (getDistance(newGraphicsOBJ.context.lastCameraPos, newGraphicsOBJ.context.cameraPos) > 30) {
+			ct = 0;
+		}
+		newGraphicsOBJ.context.lastCameraPos = newGraphicsOBJ.context.cameraPos;
 		this.translate(tx, ty);
+
 	};
 	Graphics.init(newGraphicsOBJ);
 };

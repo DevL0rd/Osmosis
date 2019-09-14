@@ -61,7 +61,6 @@ function init(plugins, settings, events, io, log, commands) {
         socket.isLoggedIn = false;
         if (!isLoggedInElsewhere(socket) && socket.email != "") {
             io.emit("userLoggedOff", socket.email);
-            cleanExpiredKeys(socket);
         }
         socket.email = "";
     })
@@ -302,10 +301,12 @@ function base64MimeType(encoded) {
     return result;
 }
 function cleanExpiredKeys(socket) {
-    for (lKey in Accounts[socket.email].loginKeys) {
-        var key = Accounts[socket.email].loginKeys[lKey];
-        if (key.ip != socket.request.connection.remoteAddress && Date.now() >= key.timeout) {
-            delete key;
+    if (Accounts[socket.email] && Accounts[socket.email].loginKeys) {
+        for (lKey in Accounts[socket.email].loginKeys) {
+            var key = Accounts[socket.email].loginKeys[lKey];
+            if (key.ip != socket.request.connection.remoteAddress && Date.now() >= key.timeout) {
+                delete key;
+            }
         }
     }
 }

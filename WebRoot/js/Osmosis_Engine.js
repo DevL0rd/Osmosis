@@ -32,19 +32,39 @@ function updateCell(cell) {
     if (cell.type === world.cellTypes.player) {
         //Server side only
         //updateMass(cell);
-        //set the forces on the cell to keep it moving;
-        setForce(cell, cell.angle, cell.speed);
+        var dist = (cell.distToMouse - cell.radius);
+        if (dist > 1) {
+            //set the forces on the cell to keep it moving;
+            applyGlobalFriction(cell);
+            var dSpeedScalar = (dist / 200);
+            if (dSpeedScalar > 2) dSpeedScalar = 2;
+            // if (dSpeedScalar < 1) dSpeedScalar = 1;
+            var nSpeed = cell.speed * dSpeedScalar;
+        } else {
+            var nSpeed = 0;
+        }
+        setForce(cell, cell.angle, nSpeed);
     }
-    if (isMoving(cell)) {
-        applyGlobalFriction(cell);
+    if (isMoving(cell) || cell.type === world.cellTypes.player) {
+        if (cell.type != world.cellTypes.player) {
+            applyGlobalFriction(cell);
+        }
         applyForceCutoff(cell);
         updatePosition(cell);
     }
 }
-
 function applyGlobalFriction(cell) {
-    cell.force.x -= (cell.force.x * world.globalFriction) * delta;
-    cell.force.y -= (cell.force.y * world.globalFriction) * delta;
+    if (cell.type === world.cellTypes.player) {
+        var defaultSpeed = (world.travelSpeed / Math.sqrt(cell.mass * world.speedDecreaseScalar)) * world.travelSpeed;
+        if (cell.speed < defaultSpeed) {
+            cell.speed = defaultSpeed;
+        } else {
+            cell.speed -= (cell.speed * world.globalFriction) * delta;
+        }
+    } else {
+        cell.force.x -= (cell.force.x * world.globalFriction) * delta;
+        cell.force.y -= (cell.force.y * world.globalFriction) * delta;
+    }
 }
 
 function applyForceCutoff(cell) {
@@ -86,14 +106,6 @@ function setForce(cell, angle, speed) {
 function addForce(cell, angle, speed) {
     var fv = getForceVector(angle, speed);
     addForceVector(cell, fv);
-}
-function playerOnMouseMove(mPos) {
-    var pCells = getAllPlayerCells();
-    for (i in pCells) {
-        var cell = pCells[i];
-        //set the angle of each cell to follow the mouse
-        cell.angle = getAngle(cell.position, mPos);
-    }
 }
 function getAllPlayerCells() {
     var playerCells = [];
@@ -139,25 +151,30 @@ socket.on("getPlayersCellIds", function (nPlayersCells) {
     playersCells = nPlayersCells;
 });
 
-var mousePos;
+var mousePos = {
+    x: 0,
+    y: 0
+};
+var mousePosRelative
 var mouseMoved = false;
 window.onmousemove = trackMouseMove;
 
 function trackMouseMove(event) {
     mousePos = {
-        x: event.clientX - canvasTranslation.x,
-        y: event.clientY - canvasTranslation.y
-    };
-    playerOnMouseMove(mousePos);
-    mouseMoved = true;
+        x: event.clientX,
+        y: event.clientY
+    }
 }
 
 setInterval(function () {
-    if (isPlaying && mouseMoved) {
-        socket.emit("mouseMove", mousePos);
-        mouseMoved = false;
+    if (isPlaying) {
+        mousePosRelative = {
+            x: mousePos.x - canvasTranslation.x,
+            y: mousePos.y - canvasTranslation.y
+        };
+        socket.emit("mouseMove", mousePosRelative);
     }
-}, 100);
+}, 20);
 
 var pressedKeys = {};
 window.onkeydown = keyDown;
