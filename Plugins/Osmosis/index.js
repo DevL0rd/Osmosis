@@ -322,9 +322,7 @@ function addCell(x, y, mass, color, type = world.cellTypes.food, socket) {
         }
         //addplayer cell to list
         players[socket.playerId].cells[nCell.id] = true;
-        if (socket.profilePicture != "/img/profilePics/noprofilepic.jpg") {
-            nCell.graphics.texture = socket.profilePicture;
-        }
+        nCell.graphics.texture = socket.profilePicture;
         nCell.name = socket.username;
         nCell.distToMouse = 0;
     }
