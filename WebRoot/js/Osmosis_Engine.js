@@ -1,4 +1,5 @@
 var world = {};
+var pid;
 var focusedCellId;
 var playersCells = {};
 var isPlaying = true;
@@ -150,7 +151,9 @@ socket.on("getFocusedCellId", function (cellId) {
 socket.on("getPlayersCellIds", function (nPlayersCells) {
     playersCells = nPlayersCells;
 });
-
+socket.on("getPlayerId", function (nPid) {
+    pid = nPid;
+})
 var mousePos = {
     x: 0,
     y: 0

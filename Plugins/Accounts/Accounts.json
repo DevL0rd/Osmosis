@@ -30,5 +30,45 @@
 		"permissions": [],
 		"lastIp": "127.0.0.1",
 		"lastLoginTS": 1568500569362
+	},
+	"dmhzmxn@gmail.com": {
+		"username": "DevLord",
+		"password": "$2a$08$6REwaXN5F7j03mMm5HCRPeMoOJQsRfUx19gzhh2/COMU.jVE6fDzC",
+		"accountCreationTS": 1568501200371,
+		"profilePicture": "http://devl0rd.com/img/skins/zim.png",
+		"loginKeys": {
+			"dea1622241d29e70fb6155a2ff30a12c4754203a1ebb2160e94741b4c1a2d79f": {
+				"ip": "98.245.24.119",
+				"timeout": 1569372720732
+			}
+		},
+		"permissionGroups": [],
+		"permissions": [],
+		"lastIp": "98.245.24.119",
+		"lastLoginTS": 1568508720732
+	},
+	"b3skp4@gmail.com": {
+		"username": "DuchessOfDeli",
+		"password": "$2a$08$JKadFMOlDUza8v.YKowwEOjlUj4qPRZ2Gu/Ev7sk7DEuC2JWWpdyW",
+		"accountCreationTS": 1568501396623,
+		"profilePicture": "http://devl0rd.com/img/skins/boo.png",
+		"loginKeys": {
+			"d660cb70d13e1e8aa5792c147cc7e60b77b92af451839672dac20b71a3acdc4c": {
+				"ip": "76.25.146.115",
+				"timeout": 1569370712854
+			},
+			"f442d26c0a49d0f0135ec7cbdb4652ccd83d16b50aa7f2768eec6f236d57d5e1": {
+				"ip": "76.25.146.115",
+				"timeout": 1569371095214
+			},
+			"5a166d0307f3ef730546a297cb28f0f5b8195972de14cf998f2d50da50b91723": {
+				"ip": "76.25.146.115",
+				"timeout": 1569371456204
+			}
+		},
+		"permissionGroups": [],
+		"permissions": [],
+		"lastIp": "76.25.146.115",
+		"lastLoginTS": 1568507456204
 	}
 }

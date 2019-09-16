@@ -1,7 +1,7 @@
 
 var gDebug = true;
 var debugCulling = false;
-Graphics.newGraphicsObj("gameCanvas", "2d", window.innerWidth, window.innerHeight, renderFrame, onResize, gDebug);
+Graphics.newGraphics("gameCanvas", "2d", renderFrame, gDebug);
 
 var currentTheme = "Osmosis"
 var canvasTranslation = {
@@ -154,26 +154,21 @@ function renderCell(cell, context) {
     if (drawBasicCell) {
         context.beginPath();
         context.arc(cell.position.x, cell.position.y, cell.radius, 0, 2 * Math.PI);
-
         context.fillStyle = cell.graphics.color;
-        context.fill();
         if (themeLoaded) {
             context.strokeStyle = ThemeCache[Themes[currentTheme].foodBorderTexture.src].pattern;
         } else {
-            context.fillStyle = cell.graphics.color;
+            context.strokeStyle = cell.graphics.color;
         }
+        context.fill();
         context.lineWidth = 5;
         context.stroke();
     }
 
 }
-function onResize(canvas) {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-}
 
 
-Graphics.newGraphicsObj("loginCanvas", "2d", window.innerWidth, window.innerHeight, renderLoginCanvas, renderLoginCanvasOnResize, gDebug);
+Graphics.newGraphics("loginCanvas", "2d", renderLoginCanvas, gDebug);
 
 function renderLoginCanvasOnResize(canvas) {
     canvas.width = $("#loginContent").innerWidth();
@@ -249,7 +244,7 @@ function renderLoginCanvas(canvas, context) {
     this.QueueFrame();
 }
 
-Graphics.newGraphicsObj("menuCanvas", "2d", window.innerWidth, window.innerHeight, renderMenuCanvas, renderMenuCanvasOnResize, gDebug);
+Graphics.newGraphics("menuCanvas", "2d", renderMenuCanvas, gDebug);
 function renderMenuCanvasOnResize(canvas) {
     canvas.width = $("#menuContent").innerWidth();
     canvas.height = $("#menuContent").innerHeight();
@@ -297,7 +292,7 @@ function renderMenuCanvas(canvas, context) {
     this.QueueFrame();
 }
 setInterval(spawnBubble, 400);
-
+resizeGraphics();
 function randomInt(min, max) { // min and max included 
     return Math.floor(Math.random() * (max - min + 1) + min);
 }

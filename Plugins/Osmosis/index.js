@@ -52,7 +52,6 @@ function updateCells() {
         var cell = world.cells[i];
         //Server side only
         updateCell(cell);
-
     }
     resolveCollisions();
 }
@@ -116,7 +115,7 @@ function applyGlobalFriction(cell) {
 
 function updatePosition(cell) {
     if (cell.force.x === 0 && cell.force.y === 0) return false;
-    cell.lastPosition = Object.assign(cell.position, {});
+    cell.lastPosition = Object.assign({}, cell.position);
     cell.position.x += cell.force.x * delta;
     cell.position.y += cell.force.y * delta;
     updatedCells.push(cell);
@@ -237,8 +236,8 @@ function handleCellToCellCollision(cellPair) {
         } else {
             var collideDepth = cellPair.cellA.radius + cellPair.cellB.radius;
             if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= collideDepth) {
-                cellPair.cellA.position = Object.assign(cellPair.cellA.lastPosition, {});
-                cellPair.cellB.position = Object.assign(cellPair.cellB.lastPosition, {});
+                // cellPair.cellA.position = Object.assign({}, cellPair.cellA.lastPosition);
+                // cellPair.cellB.position = Object.assign({}, cellPair.cellB.lastPosition);
             }
         }
     } else if (cellPair.cellB.type === world.cellTypes.player) {
@@ -254,8 +253,8 @@ function handleCellToCellCollision(cellPair) {
 
             var collideDepth = cellPair.cellA.radius + cellPair.cellB.radius;
             if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= collideDepth) {
-                cellPair.cellA.position = Object.assign(cellPair.cellA.lastPosition, {});
-                cellPair.cellB.position = Object.assign(cellPair.cellB.lastPosition, {});
+                // cellPair.cellA.position = Object.assign({}, cellPair.cellA.lastPosition);
+                // cellPair.cellB.position = Object.assign({}, cellPair.cellB.lastPosition);
             }
         }
     }
@@ -274,7 +273,7 @@ function addCell(x, y, mass, color, type = world.cellTypes.food, socket) {
         x: x,
         y: y
     };
-    nCell.lastPosition = Object.assign(nCell.position, {});
+    nCell.lastPosition = Object.assign({}, nCell.position);
     nCell.speed = 0;
     nCell.force = {
         x: 0,
@@ -315,7 +314,11 @@ function removeCell(cell) {
             players[cell.playerId].focusedCellId = largestCell.id;
             sendPlayersCells(cell.playerId);
             sendPlayerFocusedCell(cell.playerId);
+            var pid = cell.playerId;
             delete players[cell.playerId].cells[cell.id];
+            if (!Object.keys(players[pid].cells).length) {
+                players[pid].socket.emit("playerDied");
+            }
         }
     }
     removedCells.push(cell);
@@ -381,13 +384,13 @@ function sendPlayerFocusedCell(playerId) {
 
 function spawnPlayer(socket) {
     var spawnPos = getRandomSpawn(50);
-    socket.playerId = generateId();
     var playerCell = addCell(spawnPos.x, spawnPos.y, world.playerSpawnSize, "blue", world.cellTypes.player, socket);
     players[socket.playerId].socket = socket;
     players[socket.playerId].focusedCellId = playerCell.id;
     sendPlayerFocusedCell(playerCell.playerId);
     sendPlayersCells(playerCell.playerId);
     log("Player '" + socket.username + "' has spawned!", false, "Osmosis");
+    socket.emit("getPlayerId", socket.playerId);
     return playerCell;
 }
 
@@ -545,6 +548,8 @@ function init(plugins, servSettings, events, serverio, serverLog, commands) {
     log("Engine running!", false, "Osmosis");
 
     events.on("connection", function (socket) {
+        socket.playerId = generateId();
+        socket.emit("getPlayerId", socket.playerId);
         socket.emit("worldData", world);
         socket.on("disconnect", function () {
             //make sure user is playing

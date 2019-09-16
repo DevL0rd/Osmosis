@@ -28,7 +28,17 @@ EasingFunctions = {
 	// acceleration until halfway, then deceleration 
 	easeInOutQuint: function (t) { return t < .5 ? 16 * t * t * t * t * t : 1 + 16 * (--t) * t * t * t * t }
 }
-
+var gOBJs = [];
+function resizeGraphics() {
+	for (i in gOBJs) {
+		var gOBJ = gOBJs[i];
+		gOBJ.canvas.width = $(gOBJ.canvas.parentElement).innerWidth();
+		gOBJ.canvas.height = $(gOBJ.canvas.parentElement).innerHeight();
+	}
+}
+document.body.onresize = function () {
+	resizeGraphics()
+};
 function getDistance(pos1, pos2) {
 	var a = pos1.x - pos2.x;
 	var b = pos1.y - pos2.y;
@@ -37,66 +47,63 @@ function getDistance(pos1, pos2) {
 var Graphics = {};
 var ct = 0;
 var zt = 0;
-Graphics.newGraphicsObj = function (canvasID, context, nWidth, nHeight, funcRenderFrame, funcResize, dbg = false) {
-	var newGraphicsOBJ = {};
-	newGraphicsOBJ.debugenabled = dbg;
-	newGraphicsOBJ.NewFrameQueued = true;
-	newGraphicsOBJ.PerformanceSampleRate = 10;
-	newGraphicsOBJ.DrawDelay = 0;
-	newGraphicsOBJ.ApproxMaxDrawDelay = 0;
-	newGraphicsOBJ.PerformanceSampleTick = 0;
-	newGraphicsOBJ.DrawRequestTime = 0;
-	newGraphicsOBJ.RenderTimeMS = 0;
-	newGraphicsOBJ.fps = 0;
-	newGraphicsOBJ.QueueFrame = function () {
+Graphics.newGraphics = function (canvasID, context, funcRenderFrame, dbg = false) {
+	var gOBJ = {};
+	gOBJ.debugenabled = dbg;
+	gOBJ.NewFrameQueued = true;
+	gOBJ.PerformanceSampleRate = 10;
+	gOBJ.DrawDelay = 0;
+	gOBJ.ApproxMaxDrawDelay = 0;
+	gOBJ.PerformanceSampleTick = 0;
+	gOBJ.DrawRequestTime = 0;
+	gOBJ.RenderTimeMS = 0;
+	gOBJ.fps = 0;
+	gOBJ.QueueFrame = function () {
 		this.NewFrameQueued = true;
 	};
-	newGraphicsOBJ.startTime = 0;
-	newGraphicsOBJ.frameNumber = 0;
-	newGraphicsOBJ.d = new Date().getTime();
-	newGraphicsOBJ.canvas = document.getElementById(canvasID);
-	newGraphicsOBJ.context = newGraphicsOBJ.canvas.getContext(context);
-	document.body.onresize = function () {
-		funcResize(newGraphicsOBJ.canvas);
-	};
-	newGraphicsOBJ.canvas.width = nWidth;
-	newGraphicsOBJ.canvas.height = nHeight;
-	newGraphicsOBJ.RenderFrame = funcRenderFrame;
-	newGraphicsOBJ.context.cameraPos = { x: 0, y: 0 };
-	newGraphicsOBJ.context.lastCameraPos = { x: 0, y: 0 };
-	newGraphicsOBJ.context.translation = { x: 0, y: 0 };
-	newGraphicsOBJ.context.zoom = 1;
-	newGraphicsOBJ.context.lastZoom = 1;
-	newGraphicsOBJ.context.zoomTo = function (zoom) {
-		if (zoom != newGraphicsOBJ.context.zoom) {
-			var eZ = newGraphicsOBJ.context.lastZoom + (zoom - newGraphicsOBJ.context.lastZoom) * EasingFunctions.easeInOutQuad(zt);
-			newGraphicsOBJ.context.zoom = eZ;
+	gOBJ.startTime = 0;
+	gOBJ.frameNumber = 0;
+	gOBJ.d = new Date().getTime();
+	gOBJ.canvas = document.getElementById(canvasID);
+	gOBJ.context = gOBJ.canvas.getContext(context);
+	gOBJ.canvas.width = gOBJ.canvas.parentElement.innerWidth;
+	gOBJ.canvas.height = gOBJ.canvas.parentElement.innerHeight;
+	gOBJ.RenderFrame = funcRenderFrame;
+	gOBJ.context.cameraPos = { x: 0, y: 0 };
+	gOBJ.context.lastCameraPos = { x: 0, y: 0 };
+	gOBJ.context.translation = { x: 0, y: 0 };
+	gOBJ.context.zoom = 1;
+	gOBJ.context.lastZoom = 1;
+	gOBJ.context.zoomTo = function (zoom) {
+		if (zoom != gOBJ.context.zoom) {
+			var eZ = gOBJ.context.lastZoom + (zoom - gOBJ.context.lastZoom) * EasingFunctions.easeInOutQuad(zt);
+			gOBJ.context.zoom = eZ;
 			if (zt < 1) {
 				zt += 0.01;
 			} else {
 				zt = 0;
-				newGraphicsOBJ.context.lastZoom = newGraphicsOBJ.context.zoom;
+				gOBJ.context.lastZoom = gOBJ.context.zoom;
 			}
 		} else {
 			zt = 0;
-			newGraphicsOBJ.context.lastZoom = newGraphicsOBJ.context.zoom;
+			gOBJ.context.lastZoom = gOBJ.context.zoom;
 		}
 
-		//newGraphicsOBJ.context.moveCameraTo(newGraphicsOBJ.context.cameraPos)
+		//gOBJ.context.moveCameraTo(gOBJ.context.cameraPos)
 	};
-	newGraphicsOBJ.context.moveCameraTo = function (pos) {
-		newGraphicsOBJ.context.scale(newGraphicsOBJ.context.zoom, newGraphicsOBJ.context.zoom);
+	gOBJ.context.moveCameraTo = function (pos) {
+		gOBJ.context.scale(gOBJ.context.zoom, gOBJ.context.zoom);
 		// var eX = EasingFunctions.easeInOutQuad(t) * pos.x;
-		var eX = newGraphicsOBJ.context.lastCameraPos.x + (pos.x - newGraphicsOBJ.context.lastCameraPos.x) * EasingFunctions.easeInOutQuad(ct);
+		var eX = gOBJ.context.lastCameraPos.x + (pos.x - gOBJ.context.lastCameraPos.x) * EasingFunctions.easeInOutQuad(ct);
 		// var eY = EasingFunctions.easeInOutQuad(t) * pos.y;
-		var eY = newGraphicsOBJ.context.lastCameraPos.y + (pos.y - newGraphicsOBJ.context.lastCameraPos.y) * EasingFunctions.easeInOutQuad(ct);
-		newGraphicsOBJ.context.cameraPos = {
+		var eY = gOBJ.context.lastCameraPos.y + (pos.y - gOBJ.context.lastCameraPos.y) * EasingFunctions.easeInOutQuad(ct);
+		gOBJ.context.cameraPos = {
 			x: eX,
 			y: eY
 		};
-		var tx = -eX + (this.canvas.width / (newGraphicsOBJ.context.zoom * 2))
-		var ty = -eY + (this.canvas.height / (newGraphicsOBJ.context.zoom * 2))
-		newGraphicsOBJ.context.translation = {
+		var tx = -eX + (this.canvas.width / (gOBJ.context.zoom * 2))
+		var ty = -eY + (this.canvas.height / (gOBJ.context.zoom * 2))
+		gOBJ.context.translation = {
 			x: tx,
 			y: ty
 		};
@@ -105,14 +112,16 @@ Graphics.newGraphicsObj = function (canvasID, context, nWidth, nHeight, funcRend
 		}
 		if (ct < 1) {
 			ct += 0.005;
-		} else if (getDistance(newGraphicsOBJ.context.lastCameraPos, newGraphicsOBJ.context.cameraPos) > 30) {
+		} else if (getDistance(gOBJ.context.lastCameraPos, gOBJ.context.cameraPos) > 30) {
 			ct = 0;
 		}
-		newGraphicsOBJ.context.lastCameraPos = newGraphicsOBJ.context.cameraPos;
+		gOBJ.context.lastCameraPos = gOBJ.context.cameraPos;
 		this.translate(tx, ty);
 
 	};
-	Graphics.init(newGraphicsOBJ);
+
+	gOBJs.push(gOBJ);
+	Graphics.init(gOBJ);
 };
 Graphics.init = function (graphicsObj) {
 	var now = new Date();

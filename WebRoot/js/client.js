@@ -17,7 +17,10 @@ socket.on('connect', function () {
     $("#loginLink").trigger("click");
     socket.emit("getSkins");
 });
-
+socket.on("playerDied", function () {
+    console.log("You died!")
+    $("#guest_button").trigger("click");
+});
 socket.on("getSkins", function (skinUrls) {
     //populate list
     $("#skinList").html("");
@@ -36,6 +39,7 @@ socket.on("getThemes", function (newThemes) {
     Themes = newThemes;
     loadThemeData();
 });
+
 function getThemes() {
     socket.emit("getThemes", Themes);
 }
