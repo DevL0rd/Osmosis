@@ -15,6 +15,8 @@ var world = {
     radiusScalar: 20,
     massDecay: 0.01,
     minMass: 20,
+    spitMass: 16,
+    spitSpeed: 500,
     playerSpawnSize: 120,
     forceCutOff: 0.05,
     width: 15000,
@@ -70,19 +72,17 @@ function updateCell(cell) {
 }
 function calculateNewCellForces(cell) {
     var dist = (cell.distToMouse - cell.radius);
-    if (!cell.isColliding) {
-        if (dist > 1) {
-            //set the forces on the cell to keep it moving;
-            applyGlobalFriction(cell);
-            var dSpeedScalar = (dist / 200);
-            if (dSpeedScalar > 1.5) dSpeedScalar = 1.5;
-            // if (dSpeedScalar < 1) dSpeedScalar = 1;
-            var nSpeed = cell.speed * dSpeedScalar;
-        } else {
-            var nSpeed = 0;
-        }
-        setForce(cell, cell.angle, nSpeed);
+    if (dist > 1) {
+        //set the forces on the cell to keep it moving;
+        applyGlobalFriction(cell);
+        var dSpeedScalar = (dist / 200);
+        if (dSpeedScalar > 1.5) dSpeedScalar = 1.5;
+        // if (dSpeedScalar < 1) dSpeedScalar = 1;
+        var nSpeed = cell.speed * dSpeedScalar;
+    } else {
+        var nSpeed = 0;
     }
+    setForce(cell, cell.angle, nSpeed);
 }
 function updateMergeTime(cell) {
     var mNow = Date.now();
@@ -260,8 +260,6 @@ function handleCellToCellCollision(cellPair) {
     } else {
         //resolve circles
         resolveCircles(cellPair.cellA, cellPair.cellB);
-        cellPair.cellA.justCollided = true;
-        cellPair.cellB.justCollided = true;
     }
 }
 function resolveCircles(c1, c2) {
@@ -274,17 +272,14 @@ function resolveCircles(c1, c2) {
     c1.position.x = c2.position.x + (radii_sum) * unit_x;
     c1.position.y = c2.position.y + (radii_sum) * unit_y;
     var massSum = c1.mass + c2.mass;
-    if (c1.mass > c2.mass) {
-        var newVelX1 = (c1.force.x * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.x)) / massSum;
-        var newVelY1 = (c1.force.y * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.y)) / massSum;
-        c1.force.x = newVelX1;
-        c1.force.y = newVelY1;
-    } else {
-        var newVelX2 = (c2.force.x * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.x)) / massSum;
-        var newVelY2 = (c2.force.y * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.y)) / massSum;
-        c2.force.x = newVelX2;
-        c2.force.y = newVelY2;
-    }
+    var newVelX1 = (c1.force.x * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.x)) / massSum;
+    var newVelY1 = (c1.force.y * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.y)) / massSum;
+    var newVelX2 = (c2.force.x * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.x)) / massSum;
+    var newVelY2 = (c2.force.y * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.y)) / massSum;
+    c1.force.x = newVelX1;
+    c1.force.y = newVelY1;
+    c2.force.x = newVelX2;
+    c2.force.y = newVelY2;
 }
 
 function handleCellToWallCollision(cellCollisions) {
@@ -308,7 +303,7 @@ function addCell(x, y, mass, color, type = world.cellTypes.food, socket) {
     };
     nCell.angle = 0;
     nCell.mergeTime = 0;
-    nCell.canMerge = true;
+    nCell.canMerge = false;
     nCell.isColliding = false;
     nCell.graphics = {
         color: color
@@ -345,6 +340,7 @@ function removeCell(cell) {
             delete players[cell.playerId].cells[cell.id];
             if (!Object.keys(players[pid].cells).length) {
                 players[pid].socket.emit("playerDied");
+                players[pid].socket.isPlaying = false;
             }
         }
     }
@@ -376,6 +372,23 @@ function splitCell(cell) {
     }
 }
 
+function spitCells(cells) {
+    for (i in cells) {
+        var cell = cells[i];
+        spitCell(cell);
+    }
+}
+
+function spitCell(cell) {
+    var newCellMass = cell.mass - world.spitMass;
+    if (newCellMass >= world.minMass) {
+        setMass(cell, newCellMass);
+        var spawnPos = findNewPoint(cell.position, cell.angle, cell.radius + world.spitMass);
+        var nCell = addCell(spawnPos.x, spawnPos.y, world.spitMass, "transparent", world.cellTypes.food);
+        setForce(nCell, cell.angle, world.spitSpeed);
+    }
+}
+
 function removePlayer(playerId) {
     var pCells = getAllPlayerCells(playerId);
     for (i in pCells) {
@@ -401,6 +414,11 @@ function playerOnSplit(playerId) {
     //split all of players cells
     splitCells(pCells);
 }
+function playerOnSpit(playerId) {
+    var pCells = getAllPlayerCells(playerId);
+    //split all of players cells
+    spitCells(pCells);
+}
 
 function sendPlayersCells(playerId) {
     players[playerId].socket.emit("getPlayersCellIds", players[playerId].cells);
@@ -418,6 +436,7 @@ function spawnPlayer(socket) {
     sendPlayersCells(playerCell.playerId);
     log("Player '" + socket.username + "' has spawned!", false, "Osmosis");
     socket.emit("getPlayerId", socket.playerId);
+    socket.isPlaying = true;
     return playerCell;
 }
 
@@ -576,6 +595,7 @@ function init(plugins, servSettings, events, serverio, serverLog, commands) {
 
     events.on("connection", function (socket) {
         socket.playerId = generateId();
+        socket.isPlaying = false;
         socket.emit("getPlayerId", socket.playerId);
         socket.emit("worldData", world);
         socket.on("disconnect", function () {
@@ -586,16 +606,23 @@ function init(plugins, servSettings, events, serverio, serverLog, commands) {
         });
         socket.on("mouseMove", function (mousePos) {
             //validate input and make sure user is playing
-            if (socket.playerId && mousePos && mousePos.y && mousePos.x) {
+            if (socket.isPlaying && mousePos && mousePos.y && mousePos.x) {
                 playerOnMouseMove(socket.playerId, mousePos);
             }
         });
         socket.on("split", function () {
             //make sure user is playing
-            if (socket.playerId) {
+            if (socket.isPlaying) {
                 playerOnSplit(socket.playerId);
             }
         });
+        socket.on("spit", function () {
+            //make sure user is playing
+            if (socket.isPlaying) {
+                playerOnSpit(socket.playerId);
+            }
+        });
+
         socket.on("spawn", function () {
             var playerCell = spawnPlayer(socket);
         });

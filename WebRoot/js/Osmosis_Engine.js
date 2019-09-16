@@ -44,19 +44,17 @@ function updateCell(cell) {
 }
 function calculateNewCellForces(cell) {
     var dist = (cell.distToMouse - cell.radius);
-    if (!cell.isColliding) {
-        if (dist > 1) {
-            //set the forces on the cell to keep it moving;
-            applyGlobalFriction(cell);
-            var dSpeedScalar = (dist / 200);
-            if (dSpeedScalar > 1.5) dSpeedScalar = 1.5;
-            // if (dSpeedScalar < 1) dSpeedScalar = 1;
-            var nSpeed = cell.speed * dSpeedScalar;
-        } else {
-            var nSpeed = 0;
-        }
-        setForce(cell, cell.angle, nSpeed);
+    if (dist > 1) {
+        //set the forces on the cell to keep it moving;
+        applyGlobalFriction(cell);
+        var dSpeedScalar = (dist / 200);
+        if (dSpeedScalar > 1.5) dSpeedScalar = 1.5;
+        // if (dSpeedScalar < 1) dSpeedScalar = 1;
+        var nSpeed = cell.speed * dSpeedScalar;
+    } else {
+        var nSpeed = 0;
     }
+    setForce(cell, cell.angle, nSpeed);
 }
 function applyGlobalFriction(cell) {
     if (cell.type === world.cellTypes.player) {
@@ -226,8 +224,6 @@ function handleCellToCellCollision(cellPair) {
     } else {
         //resolve circles
         resolveCircles(cellPair.cellA, cellPair.cellB);
-        cellPair.cellA.justCollided = true;
-        cellPair.cellB.justCollided = true;
     }
 }
 function resolveCircles(c1, c2) {
@@ -240,17 +236,14 @@ function resolveCircles(c1, c2) {
     c1.position.x = c2.position.x + (radii_sum) * unit_x;
     c1.position.y = c2.position.y + (radii_sum) * unit_y;
     var massSum = c1.mass + c2.mass;
-    if (c1.mass > c2.mass) {
-        var newVelX1 = (c1.force.x * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.x)) / massSum;
-        var newVelY1 = (c1.force.y * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.y)) / massSum;
-        c1.force.x = newVelX1;
-        c1.force.y = newVelY1;
-    } else {
-        var newVelX2 = (c2.force.x * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.x)) / massSum;
-        var newVelY2 = (c2.force.y * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.y)) / massSum;
-        c2.force.x = newVelX2;
-        c2.force.y = newVelY2;
-    }
+    var newVelX1 = (c1.force.x * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.x)) / massSum;
+    var newVelY1 = (c1.force.y * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.y)) / massSum;
+    var newVelX2 = (c2.force.x * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.x)) / massSum;
+    var newVelY2 = (c2.force.y * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.y)) / massSum;
+    c1.force.x = newVelX1;
+    c1.force.y = newVelY1;
+    c2.force.x = newVelX2;
+    c2.force.y = newVelY2;
 }
 
 function handleCellToWallCollision(cellCollisions) {
@@ -348,6 +341,8 @@ function keyDown(event) {
         pressedKeys[keyCode] = true;
         if (keyCode == 32) { //space
             socket.emit("split");
+        } else if (keyCode == 87) {
+            socket.emit("spit");
         }
     }
 }
