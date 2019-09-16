@@ -22,7 +22,6 @@ function updateCells() {
         var cell = world.cells[i];
         updateCell(cell);
     }
-    //resolveCollisions();
 }
 
 function isMoving(cell) {
@@ -57,16 +56,18 @@ function calculateNewCellForces(cell) {
     setForce(cell, cell.angle, nSpeed);
 }
 function applyGlobalFriction(cell) {
-    if (cell.type === world.cellTypes.player) {
-        var defaultSpeed = (world.travelSpeed / Math.sqrt(cell.mass * world.speedDecreaseScalar)) * world.travelSpeed;
-        if (cell.speed < defaultSpeed) {
-            cell.speed = defaultSpeed;
+    if (!cell.ignoreGlobalFriction) {
+        if (cell.type === world.cellTypes.player) {
+            var defaultSpeed = (world.travelSpeed / Math.sqrt(cell.mass * world.speedDecreaseScalar)) * world.travelSpeed;
+            if (cell.speed < defaultSpeed) {
+                cell.speed = defaultSpeed;
+            } else {
+                cell.speed -= (cell.speed * world.globalFriction) * delta;
+            }
         } else {
-            cell.speed -= (cell.speed * world.globalFriction) * delta;
+            cell.force.x -= (cell.force.x * world.globalFriction) * delta;
+            cell.force.y -= (cell.force.y * world.globalFriction) * delta;
         }
-    } else {
-        cell.force.x -= (cell.force.x * world.globalFriction) * delta;
-        cell.force.y -= (cell.force.y * world.globalFriction) * delta;
     }
 }
 
@@ -201,30 +202,46 @@ function detectCellToWallCollision(cell) {
 }
 
 function handleCellToCellCollision(cellPair) {
-    if ((cellPair.cellA.canMerge && cellPair.cellB.canMerge) || ((cellPair.cellA.type === world.cellTypes.player || cellPair.cellB.type === world.cellTypes.player) && (cellPair.cellA.type === world.cellTypes.food || cellPair.cellB.type === world.cellTypes.food))) {
-        //eat the smaller cell
-        if (cellPair.cellA.mass > cellPair.cellB.mass && cellPair.cellA.type === world.cellTypes.player) {
-            //if cell is halfway over the target cell.
-            var eatDepth = cellPair.cellA.radius + cellPair.cellB.radius / 2;
-            if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
-                //addMass(cellPair.cellA, cellPair.cellB.mass); //Server Side Only
-                cellPair.cellB.mass = 0; //prevent double mass gain
-                //removeCell(cellPair.cellB); //Server Side Only
-            }
-        } else if (cellPair.cellB.type === world.cellTypes.player) {
-            //if cell is halfway over the target cell.
-            var eatDepth = cellPair.cellA.radius / 2 + cellPair.cellB.radius;
-            if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
-                //addMass(cellPair.cellB, cellPair.cellA.mass); //Server Side Only
-                //prevent double mass gain
-                cellPair.cellA.mass = 0;
-                //removeCell(cellPair.cellA); //Server Side Only
-            }
-        }
-    } else {
-        //resolve circles
+    //eat the smaller cell
+    if (cellPair.cellA.type === world.cellTypes.food && cellPair.cellB.type === world.cellTypes.food) {
         resolveCircles(cellPair.cellA, cellPair.cellB);
+        return;
     }
+    if (cellPair.cellA.type == world.cellTypes.player && cellPair.cellB.type == world.cellTypes.player && cellPair.cellA.playerID == cellPair.cellB.playerID && (!cellPair.cellA.canMerge || !cellPair.cellB.canMerge)) {
+        resolveCircles(cellPair.cellA, cellPair.cellB);
+        return;
+    }
+    //Server Side Only
+    // if (cellPair.cellA.mass > cellPair.cellB.mass && (cellPair.cellA.type === world.cellTypes.player || cellPair.cellA.type === world.cellTypes.blackhole)) {
+    //     //if cell is halfway over the target cell.
+    //     var eatDepth = cellPair.cellA.radius + cellPair.cellB.radius / 2;
+    //     if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
+    //         addMass(cellPair.cellA, cellPair.cellB.mass);
+    //         cellPair.cellB.mass = 0; //prevent double mass gain
+    //         removeCell(cellPair.cellB);
+    //         if (cellPair.cellA.type === world.cellTypes.blackhole) {
+    //             if (cellPair.cellA.mass > world.blackHoleExplosionMass) {
+    //                 detonateCell(cellPair.cellA)
+    //             }
+    //         }
+    //     }
+    //     return;
+    // } else if (cellPair.cellB.type === world.cellTypes.player || cellPair.cellB.type === world.cellTypes.blackhole) {
+    //     //if cell is halfway over the target cell.
+    //     var eatDepth = cellPair.cellA.radius / 2 + cellPair.cellB.radius;
+    //     if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
+    //         addMass(cellPair.cellB, cellPair.cellA.mass);
+    //         //prevent double mass gain
+    //         cellPair.cellA.mass = 0;
+    //         removeCell(cellPair.cellA);
+    //         if (cellPair.cellB.type === world.cellTypes.blackhole) {
+    //             if (cellPair.cellB.mass > world.blackHoleExplosionMass) {
+    //                 detonateCell(cellPair.cellB)
+    //             }
+    //         }
+    //     }
+    //     return;
+    // }
 }
 function resolveCircles(c1, c2) {
     let distance_x = c1.position.x - c2.position.x;
@@ -250,6 +267,11 @@ function handleCellToWallCollision(cellCollisions) {
     for (i in cellCollisions) {
         var cellCollision = cellCollisions[i];
         cellCollision.cell.position[cellCollision.axis] -= cellCollision.collisionDepth;
+        if (cellCollision.cell.type === world.cellTypes.player) {
+            cellCollision.cell.force[cellCollision.axis] = 0;
+        } else {
+            cellCollision.cell.force[cellCollision.axis] = -cellCollision.cell.force[cellCollision.axis];
+        }
     }
 }
 function getAllPlayerCells() {
@@ -275,6 +297,7 @@ function getAngle(pos1, pos2) {
 function gameLoop() {
     loopStart();
     updateCells();
+    //resolveCollisions();
     var elapsedTime = loopEnd();
     //console.log(elapsedTime);
     setTimeout(gameLoop, 10);
@@ -316,8 +339,8 @@ window.onmousemove = trackMouseMove;
 
 function trackMouseMove(event) {
     mousePos = {
-        x: event.clientX,
-        y: event.clientY
+        x: event.clientX / canvasZoom,
+        y: event.clientY / canvasZoom
     }
 }
 

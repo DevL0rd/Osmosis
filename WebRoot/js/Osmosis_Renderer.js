@@ -1,6 +1,8 @@
 
 var gDebug = true;
 var debugCulling = false;
+var debugBlackholeFinder = true;
+var debugAttractorRadius = true;
 Graphics.newGraphics("gameCanvas", "2d", renderFrame, gDebug);
 
 var currentTheme = "Osmosis"
@@ -8,6 +10,7 @@ var canvasTranslation = {
     x: 0,
     y: 0
 };
+var canvasZoom = 1;
 var maxZoomMass = 2500;
 var context;
 var ThemeCache = {};
@@ -56,6 +59,7 @@ function renderFrame(canvas, context) {
     if (focusedCellId && world.cells[focusedCellId]) {
         var nz = 1 - (world.cells[focusedCellId].mass / maxZoomMass);
         context.zoomTo(nz);
+        canvasZoom = nz;
         context.moveCameraTo(world.cells[focusedCellId].position);
     }
     canvasTranslation = context.translation;
@@ -92,6 +96,17 @@ function renderCells(cells, context) {
             context.lineWidth = 5;
             context.stroke();
             context.closePath();
+        }
+        if (focusedCellId && world.cells[focusedCellId]) {
+            if (debugBlackholeFinder && cell.type === world.cellTypes.blackhole) {
+                context.beginPath();
+                context.moveTo(world.cells[focusedCellId].position.x, world.cells[focusedCellId].position.y);
+                context.lineTo(cell.position.x, cell.position.y);
+                context.strokeStyle = "purple";
+                context.lineWidth = 5;
+                context.stroke();
+                context.closePath();
+            }
         }
     }
 }
@@ -164,7 +179,14 @@ function renderCell(cell, context) {
         context.lineWidth = 5;
         context.stroke();
     }
-
+    if (debugAttractorRadius && cell.type === world.cellTypes.blackhole) {
+        var attrRadius = cell.radius + world.attractorAttractionDistance;
+        context.beginPath();
+        context.arc(cell.position.x, cell.position.y, attrRadius, 0, 2 * Math.PI);
+        context.lineWidth = 5;
+        context.strokeStyle = "purple";
+        context.stroke();
+    }
 }
 
 

@@ -8,7 +8,7 @@ var fs = require('fs');
 var DB = require('../../Devlord_modules/DB.js');
 var world = {
     cells: {},
-    cellTypes: { food: 1, player: 2 },
+    cellTypes: { food: 1, player: 2, blackhole: 3 },
     travelSpeed: 30,
     speedDecreaseScalar: 0.1,
     globalFriction: 0.5,
@@ -23,16 +23,24 @@ var world = {
     height: 15000,
     foodCount: 0,
     maxFoodCount: 5000,
-    foodSpawnSpeed: 100,
     foodSpawnAmount: 1,
     minFoodSize: 3,
     maxFoodSize: 7,
-    mergeDelayScalar: 60
+    mergeDelayScalar: 60,
+    blackHoleExplosionMass: 500,
+    blackHoleCount: 0,
+    blackHoleMinSpawnSpeed: 15,
+    blackHoleMaxSpawnSpeed: 30,
+    maxBlackHoleCount: 2,
+    blackHoleSpawnSize: 20,
+    attractorAttractionDistance: 300,
+    detonationPieces: 30
 };
 
 
 
 var players = {};
+var attractors = {};
 var updatedCells = [];
 var removedCells = [];
 var then = Date.now();
@@ -54,7 +62,6 @@ function updateCells() {
         var cell = world.cells[i];
         updateCell(cell);
     }
-    resolveCollisions();
 }
 function updateCell(cell) {
     if (cell.type === world.cellTypes.player) {
@@ -62,12 +69,26 @@ function updateCell(cell) {
         calculateNewCellForces(cell)
         updateMergeTime(cell); //Server side only
     }
+    updateAttractorForces(cell); //Server side only
     if (isMoving(cell) || cell.type === world.cellTypes.player) {
         if (cell.type != world.cellTypes.player) {
             applyGlobalFriction(cell);
         }
         applyForceCutoff(cell);
         updatePosition(cell);
+    }
+}
+function updateAttractorForces(cell) {
+    if (!cell.isAttractor) {
+        for (i in attractors) {
+            var attractor = attractors[i];
+            var distToAttractorSurface = getDistanceBetweenCells(attractor, cell) - attractor.radius;
+            if (distToAttractorSurface <= world.attractorAttractionDistance) {
+                var angleToAttractor = getAngle(attractor.position, cell.position);
+                var nSpeed = -((1 - distToAttractorSurface / world.attractorAttractionDistance) * 100)
+                addForce(cell, angleToAttractor, nSpeed);
+            }
+        }
     }
 }
 function calculateNewCellForces(cell) {
@@ -107,19 +128,25 @@ function spawnRandomFoodCell() {
     addCell(spawnPos.x, spawnPos.y, foodSize, "transparent");
     world.foodCount++;
 }
-
+function spawnRandomBlackHole() {
+    var spawnPos = getRandomSpawn(world.blackHoleSpawnSize);
+    addCell(spawnPos.x, spawnPos.y, world.blackHoleSpawnSize, "black", world.cellTypes.blackhole);
+    world.blackHoleCount++;
+}
 
 function applyGlobalFriction(cell) {
-    if (cell.type === world.cellTypes.player) {
-        var defaultSpeed = (world.travelSpeed / Math.sqrt(cell.mass * world.speedDecreaseScalar)) * world.travelSpeed;
-        if (cell.speed < defaultSpeed) {
-            cell.speed = defaultSpeed;
+    if (!cell.ignoreGlobalFriction) {
+        if (cell.type === world.cellTypes.player) {
+            var defaultSpeed = (world.travelSpeed / Math.sqrt(cell.mass * world.speedDecreaseScalar)) * world.travelSpeed;
+            if (cell.speed < defaultSpeed) {
+                cell.speed = defaultSpeed;
+            } else {
+                cell.speed -= (cell.speed * world.globalFriction) * delta;
+            }
         } else {
-            cell.speed -= (cell.speed * world.globalFriction) * delta;
+            cell.force.x -= (cell.force.x * world.globalFriction) * delta;
+            cell.force.y -= (cell.force.y * world.globalFriction) * delta;
         }
-    } else {
-        cell.force.x -= (cell.force.x * world.globalFriction) * delta;
-        cell.force.y -= (cell.force.y * world.globalFriction) * delta;
     }
 }
 
@@ -235,31 +262,67 @@ function detectCellToWallCollision(cell) {
     }
     return collisonAxi;
 }
-
+function getRandomAngle() {
+    return getRandomInt(1, 360) - 180;
+}
+function detonateCell(cell) {
+    var newMass = cell.mass / world.detonationPieces;
+    var newPieces = world.detonationPieces;
+    var spawnDist = cell.radius;
+    while (newPieces) {
+        var newAngle = getRandomAngle();
+        var spawnPos = findNewPoint(cell.position, newAngle, spawnDist);
+        // var newSpawnFound = false;
+        // while (!newSpawnFound) {
+        //     var spawnPos = findNewPoint(cell.position, getRandomAngle(), spawnDist);
+        //     newSpawnFound = !testCellCollision({ position: { x: rX, y: rY }, radius: radius });
+        // }
+        var nFoodCell = addCell(spawnPos.x, spawnPos.y, newMass, "transparent");
+        setForce(nFoodCell, newAngle, 200);
+        newPieces--;
+    }
+    removeCell(cell);
+}
 function handleCellToCellCollision(cellPair) {
-    if ((cellPair.cellA.canMerge && cellPair.cellB.canMerge) || ((cellPair.cellA.type === world.cellTypes.player || cellPair.cellB.type === world.cellTypes.player) && (cellPair.cellA.type === world.cellTypes.food || cellPair.cellB.type === world.cellTypes.food))) {
-        //eat the smaller cell
-        if (cellPair.cellA.mass > cellPair.cellB.mass && cellPair.cellA.type === world.cellTypes.player) {
-            //if cell is halfway over the target cell.
-            var eatDepth = cellPair.cellA.radius + cellPair.cellB.radius / 2;
-            if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
-                addMass(cellPair.cellA, cellPair.cellB.mass); //Server Side Only
-                cellPair.cellB.mass = 0; //prevent double mass gain
-                removeCell(cellPair.cellB); //Server Side Only
-            }
-        } else if (cellPair.cellB.type === world.cellTypes.player) {
-            //if cell is halfway over the target cell.
-            var eatDepth = cellPair.cellA.radius / 2 + cellPair.cellB.radius;
-            if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
-                addMass(cellPair.cellB, cellPair.cellA.mass); //Server Side Only
-                //prevent double mass gain
-                cellPair.cellA.mass = 0;
-                removeCell(cellPair.cellA); //Server Side Only
+    //eat the smaller cell
+    if (cellPair.cellA.type === world.cellTypes.food && cellPair.cellB.type === world.cellTypes.food) {
+        resolveCircles(cellPair.cellA, cellPair.cellB);
+        return;
+    }
+    if (cellPair.cellA.type == world.cellTypes.player && cellPair.cellB.type == world.cellTypes.player && cellPair.cellA.playerID == cellPair.cellB.playerID && (!cellPair.cellA.canMerge || !cellPair.cellB.canMerge)) {
+        resolveCircles(cellPair.cellA, cellPair.cellB);
+        return;
+    }
+    //Server Side Only
+    if (cellPair.cellA.mass > cellPair.cellB.mass && (cellPair.cellA.type === world.cellTypes.player || cellPair.cellA.type === world.cellTypes.blackhole)) {
+        //if cell is halfway over the target cell.
+        var eatDepth = cellPair.cellA.radius + cellPair.cellB.radius / 2;
+        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
+            addMass(cellPair.cellA, cellPair.cellB.mass);
+            cellPair.cellB.mass = 0; //prevent double mass gain
+            removeCell(cellPair.cellB);
+            if (cellPair.cellA.type === world.cellTypes.blackhole) {
+                if (cellPair.cellA.mass > world.blackHoleExplosionMass) {
+                    detonateCell(cellPair.cellA)
+                }
             }
         }
-    } else {
-        //resolve circles
-        resolveCircles(cellPair.cellA, cellPair.cellB);
+        return;
+    } else if (cellPair.cellB.type === world.cellTypes.player || cellPair.cellB.type === world.cellTypes.blackhole) {
+        //if cell is halfway over the target cell.
+        var eatDepth = cellPair.cellA.radius / 2 + cellPair.cellB.radius;
+        if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
+            addMass(cellPair.cellB, cellPair.cellA.mass);
+            //prevent double mass gain
+            cellPair.cellA.mass = 0;
+            removeCell(cellPair.cellA);
+            if (cellPair.cellB.type === world.cellTypes.blackhole) {
+                if (cellPair.cellB.mass > world.blackHoleExplosionMass) {
+                    detonateCell(cellPair.cellB)
+                }
+            }
+        }
+        return;
     }
 }
 function resolveCircles(c1, c2) {
@@ -286,6 +349,11 @@ function handleCellToWallCollision(cellCollisions) {
     for (i in cellCollisions) {
         var cellCollision = cellCollisions[i];
         cellCollision.cell.position[cellCollision.axis] -= cellCollision.collisionDepth;
+        if (cellCollision.cell.type === world.cellTypes.player) {
+            cellCollision.cell.force[cellCollision.axis] = 0;
+        } else {
+            cellCollision.cell.force[cellCollision.axis] = -cellCollision.cell.force[cellCollision.axis];
+        }
     }
 }
 function addCell(x, y, mass, color, type = world.cellTypes.food, socket) {
@@ -303,8 +371,11 @@ function addCell(x, y, mass, color, type = world.cellTypes.food, socket) {
     };
     nCell.angle = 0;
     nCell.mergeTime = 0;
+    nCell.isStatic = false;
+    nCell.ignoreGlobalFriction = false;
     nCell.canMerge = false;
     nCell.isColliding = false;
+    nCell.isAttractor = false;
     nCell.graphics = {
         color: color
     };
@@ -322,6 +393,13 @@ function addCell(x, y, mass, color, type = world.cellTypes.food, socket) {
         nCell.distToMouse = 0;
     }
     world.cells[nCell.id] = nCell;
+    if (nCell.type == world.cellTypes.blackhole) {
+        nCell.isAttractor = true;
+        nCell.isStatic = true;
+        nCell.ignoreGlobalFriction = true;
+        attractors[nCell.id] = nCell;
+        setForce(nCell, getRandomAngle(), getRandomInt(world.blackHoleMinSpawnSpeed, world.blackHoleMaxSpawnSpeed));
+    }
     updatedCells.push(nCell);
     return nCell;
 }
@@ -343,9 +421,15 @@ function removeCell(cell) {
                 players[pid].socket.isPlaying = false;
             }
         }
+    } else if (cell.type === world.cellTypes.blackhole) {
+        world.blackHoleCount--;
+    }
+    if (attractors[cell.id]) {
+        delete attractors[cell.id];
     }
     removedCells.push(cell);
     delete world.cells[cell.id];
+
 }
 
 function splitCells(cells) {
@@ -549,6 +633,7 @@ function addMass(cell, mass) {
 function setMass(cell, mass) {
     cell.mass = mass;
     cell.radius = Math.sqrt(cell.mass * world.radiusScalar);
+    updatedCells.push(cell);
 }
 
 function generateId() {
@@ -562,6 +647,10 @@ function gameLoop() {
     loopStart();
     foodTick();
     updateCells();
+    resolveCollisions();
+    if (world.blackHoleCount < world.maxBlackHoleCount) {
+        spawnRandomBlackHole();
+    }
     //send updates to client
     io.emit("worldUpdate", { updatedCells: updatedCells, removedCells: removedCells });
     updatedCells = [];
