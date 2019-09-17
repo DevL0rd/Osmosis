@@ -38,8 +38,7 @@ function reloadAccounts() {
     Accounts = DB.load(accountDBPath);
     exports.Accounts = Accounts;
 }
-
-function init(plugins, settings, events, io, log, commands) {
+function init(exports, settings, events, io, log, commands) {
     function isLoggedInElsewhere(socket) {
         var sockets = io.sockets.sockets;
         for (var socketId in sockets) {
@@ -63,7 +62,7 @@ function init(plugins, settings, events, io, log, commands) {
             io.emit("userLoggedOff", socket.email);
         }
         socket.email = "";
-    })
+    }, "Accounts"); //Flag which plugin this event belongs too
     events.on("connection", function (socket) {
         socket.isLoggedIn = false;
         socket.email = "";
@@ -283,7 +282,7 @@ function init(plugins, settings, events, io, log, commands) {
                 exports.Accounts = Accounts;
             }
         });
-    });
+    }, "Accounts"); //Flag which plugin this event belongs too
 }
 function base64MimeType(encoded) {
     var result = null;
@@ -402,8 +401,17 @@ function getUserEmail(username) {
     }
     return false;
 }
-
+function uninit(events, io, log, commands) {
+    //disconnect all sockets
+    var sockets = Object.values(io.of("/").connected);
+    for (var socketId in sockets) {
+        var socket = sockets[socketId];
+        socket.disconnect(true);
+    }
+    delete commands.reloadaccounts;
+}
 exports.init = init;
+exports.uninit = uninit;
 exports.getPermissions = getPermissions;
 exports.hasPermission = hasPermission;
 exports.hasPermissionGroup = hasPermissionGroup;

@@ -1,6 +1,6 @@
 var Version = 0
 //Force debug until you make UI to toggle it
-var socket = io();
+var socket = io({ reconnection: true });
 socket.on('forceRefresh', function () {
     window.location.reload();
 });

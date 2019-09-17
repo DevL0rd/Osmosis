@@ -26,7 +26,7 @@ if (isServer) {
     var isPlaying = true;
 
 }
-
+var isRunning = true;
 
 //***WORLD DATA STORAGE***
 var world = {
@@ -87,7 +87,9 @@ function gameLoop() {
     }
     var elapsedTime = loopEnd(); //Track end time, and get elapsed time.
     //console.log(elapsedTime);
-    setTimeout(gameLoop, 20); //Do game loop again in 40ms.
+    if (isRunning) {
+        setTimeout(gameLoop, 20); //Do game loop again in 20ms.
+    }
 }
 
 
@@ -208,7 +210,7 @@ function detectAndResolveCollisions(obj) {
         for (i in objPairs) {
             var oPair = objPairs[i];
             // oPair => [objA, objB]
-            events.trigger("collision", oPair);
+            engineEvents.trigger("collision", oPair);
         }
     }
     var objWallCollisions = detectobjToWallCollision(obj); //Get any collisions with the wall
@@ -739,7 +741,7 @@ function init(plugins, servSettings, events, serverio, serverLog, commands) {
             socket.emit("getThemes", Themes);
         });
 
-    });
+    }, "Osmosis");
     commands.reloadThemes = {
         usage: "reloadThemes",
         help: "Reloads the themes for osmosis.",
@@ -758,7 +760,7 @@ function init(plugins, servSettings, events, serverio, serverLog, commands) {
 
 
 
-var events = {
+var engineEvents = {
     "collision": [],
     "on": function (event, callback) {
         if (this[event] && event != "trigger" && event != "on" && event != "addEvent") {
@@ -786,7 +788,7 @@ var events = {
 };
 
 //***GAME LOGIC ***/
-events.on("collision", function (objPair) {
+engineEvents.on("collision", function (objPair) {
     //eat the smaller obj
     if (objPair.objA.type === world.objTypes.food && objPair.objB.type === world.objTypes.food) {
         resolveCircles(objPair.objA, objPair.objB); //resolve collision and transfer force
@@ -832,8 +834,20 @@ function eatCell(cellA, preyCell) {
     preyCell.mass = 0; //prevent double mass gain
     removeobj(preyCell);
 }
+function uninit(events, io, log, commands) {
+    isRunning = false;
+    //disconnect all sockets
+    var sockets = Object.values(io.of("/").connected);
+    for (var socketId in sockets) {
+        var socket = sockets[socketId];
+        socket.disconnect(true);
+    }
+    delete commands.reloadThemes;
+    delete commands.reloadSkins;
+}
 if (isServer) {
     module.exports.init = init;
+    module.exports.uninit = uninit;
 } else {
     //***CLIENT CODE***/
     socket.on("worldData", function (worldData) {
