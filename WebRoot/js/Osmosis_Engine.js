@@ -1,86 +1,554 @@
-var world = {};
-var pid;
-var focusedCellId;
-var playersCells = {};
-var isPlaying = true;
-var then = Date.now();
-var now = Date.now();
-var delta = (now - then) / 1000;
-function loopStart() {
-    now = Date.now();
-    delta = (now - then) / 1000;
+//Authour: Dustin Harris
+//GitHub: https://github.com/DevL0rd
+var isServer = (typeof window === 'undefined'); //detect if in browser
+if (isServer) {
+    //Server specific inits
+    var io;
+    var log;
+    var serverSettings;
+    var readdirp = require('readdirp');
+    var fs = require('fs');
+    var DB = require('../../Devlord_modules/DB.js');
+    var Themes = {};
+    var skinUrls = [];
+    //****SPECIAL obj TRACKERS****
+    var players = {};
+    var attractors = {};
+    var updatedObjs = [];
+    var removedObjs = [];
+    var foodCount = 0;
+    var blackHoleCount = 0;
+} else {
+    //Client specific inits
+    var pid;
+    var focusedObjId;
+    var playersObjs = {};
+    var isPlaying = true;
+
 }
 
-function loopEnd() {
+
+//***WORLD DATA STORAGE***
+var world = {
+    objs: {},
+    width: 15000,
+    height: 15000,
+    playerSpawnSize: 120,
+    minMass: 50,
+    spitMass: 16,
+    spitSpeed: 500,
+    maxFoodCount: 5000,
+    foodSpawnAmount: 1,
+    minFoodSize: 3,
+    maxFoodSize: 7,
+    maxBlackHoleCount: 2,
+    blackHoleSpawnSize: 20,
+    blackHoleMinSpawnSpeed: 15,
+    blackHoleMaxSpawnSpeed: 30,
+    blackHoleExplosionMass: 1500,
+    blackHoleMassSuckScalar: 0.005,
+    detonationPieces: 30,
+    speedDecreaseScalar: 0.9,
+    radiusScalar: 20,
+    massDecay: 0.01,
+    mergeDelayScalar: 60,
+    acceleration: 50,
+    globalFriction: 0.8,
+    forceCutOff: 0.05,
+    objTypes: { food: 1, player: 2, blackhole: 3 },
+    attractorAttractionDistance: 300
+};
+
+
+//***DELTA CALCULATIONS***
+var then = Date.now(); //Init time vars
+var now = Date.now(); //Init time vars
+var delta = (now - then) / 1000; //Set initial delta
+function loopStart() { //Record loop start time and calc new delta
+    now = Date.now();
+    //Measure new delta
+    delta = (now - then) / 1000;
+}
+function loopEnd() { //Record loop end time and get elapsed time
     then = now;
     elapsedTime = Date.now() - then;
     return elapsedTime;
 }
 
-function updateCells() {
-    for (i in world.cells) {
-        var cell = world.cells[i];
-        updateCell(cell);
+
+
+//***GAME LOOP***
+function gameLoop() {
+    loopStart(); //Track start time, and get new delta.
+    updateobjs(); //Update all objs
+    if (isServer) {
+        spawnTick(); //spawn food and blackholes etc.. when needed
+        sendUpdatesToClients(); //send updates to clients
+    }
+    var elapsedTime = loopEnd(); //Track end time, and get elapsed time.
+    //console.log(elapsedTime);
+    setTimeout(gameLoop, 20); //Do game loop again in 40ms.
+}
+
+
+//***GAME LOOP FUNCTIONS***/
+function updateobjs() { //Update every obj.
+    for (i in world.objs) {
+        var obj = world.objs[i];
+        updateobj(obj);
+    }
+}
+function spawnTick() { //spawn food and blackholes etc.. when needed
+    var spawnCount = world.foodSpawnAmount; //Track how many that needs to be spawned
+    while (spawnCount && foodCount < world.maxFoodCount) {
+        spawnRandomFoodobj(); //Spawn a food obj somewhere random
+        spawnCount--; //Decrement the ammount that needs to be spawned.
+    }
+    if (blackHoleCount < world.maxBlackHoleCount) { //Spawn black hole if not enough of them are spawned
+        spawnRandomBlackHole();
+    }
+}
+function sendUpdatesToClients() { //Server side only
+    io.emit("worldUpdate", { updatedObjs: updatedObjs, removedObjs: removedObjs });  //Send every client the updates
+    updatedObjs = []; //Clear update queue
+    removedObjs = []; //Clear update queue
+}
+function updateobj(obj) {
+    if (obj.type === world.objTypes.player) { //Update player specific data for obj
+        if (isServer) {
+            applyMassDecay(obj);
+            updateMergeTime(obj);
+        }
+        calculateMouseMovement(obj);
+    }
+    //Make objs attract to attractors
+    if (isServer) {
+        updateAttractorForces(obj);
+    }
+    if (!obj.isStatic && isMoving(obj)) { //Only update moving objs positions and friction.
+        if (!obj.ignoreGlobalFriction) {
+            applyGlobalFriction(obj); //Apply friction to objs that don't ignore it.
+        }
+        applyForceCutoff(obj); //Remove force from objects moving too slowly to notice.
+        updatePosition(obj);  //Move obj according to force applied
     }
 }
 
-function isMoving(cell) {
-    return (cell.force.x !== 0 || cell.force.y !== 0);
-}
-function updateCell(cell) {
-    if (cell.type === world.cellTypes.player) {
-        //updateMass(cell); //Server side only
-        calculateNewCellForces(cell);
-        //updateMergeTime(cell); //Server side only
-    }
-    if (isMoving(cell) || cell.type === world.cellTypes.player) {
-        if (cell.type != world.cellTypes.player) {
-            applyGlobalFriction(cell);
-        }
-        applyForceCutoff(cell);
-        updatePosition(cell);
+
+//***updateobj FUNCTIONS***
+function updateMergeTime(obj) { //keeps track of when the player obj can merge with itself
+    var mNow = Date.now();
+    if (obj.mergeTime <= mNow) {
+        obj.canMerge = true;
+    } else {
+        obj.canMerge = false;
     }
 }
-function calculateNewCellForces(cell) {
-    var dist = (cell.distToMouse - cell.radius);
+function calculateMouseMovement(obj) { //Player movement calculations based on mouse position
+    dist = (obj.distToMouse - obj.radius); //Get distance to mouse from obj wall
+    obj.speed = Math.sqrt((obj.mass * 10) * world.speedDecreaseScalar);
     if (dist > 1) {
-        //set the forces on the cell to keep it moving;
-        applyGlobalFriction(cell);
+        //set the forces on the obj to keep it moving;
+        applyGlobalFriction(obj);
         var dSpeedScalar = (dist / 200);
         if (dSpeedScalar > 1.5) dSpeedScalar = 1.5;
-        // if (dSpeedScalar < 1) dSpeedScalar = 1;
-        var nSpeed = cell.speed * dSpeedScalar;
+        var acell = world.acceleration * dSpeedScalar;
     } else {
-        var nSpeed = 0;
+        var acell = 0;
     }
-    setForce(cell, cell.angle, nSpeed);
+    addForce(obj, obj.angle, acell);
+    // console.log(velocity + "-" + obj.speed);
+    // var velocity = getVelocityOfVector(obj.force) | 1;
+    // var acobj = Math.min(velocity, dist);
+
+    // addForce(obj, obj.angle, acobj);
 }
-function applyGlobalFriction(cell) {
-    if (!cell.ignoreGlobalFriction) {
-        if (cell.type === world.cellTypes.player) {
-            var defaultSpeed = (world.travelSpeed / Math.sqrt(cell.mass * world.speedDecreaseScalar)) * world.travelSpeed;
-            if (cell.speed < defaultSpeed) {
-                cell.speed = defaultSpeed;
-            } else {
-                cell.speed -= (cell.speed * world.globalFriction) * delta;
+function updateAttractorForces(obj) {
+    if (!obj.isAttractor) { //don't attract other attractors
+        for (i in attractors) { //Update the forces on the current obj with every attractor
+            var attractor = attractors[i];
+            var distToAttractorSurface = getDistanceBetweenObjs(attractor, obj) - attractor.radius;
+            if (distToAttractorSurface <= world.attractorAttractionDistance) { //If objs is within attractor range pull them
+                var angleToAttractor = getAngle(attractor.position, obj.position); //Get angle to attractor
+                var acceleration = -((1 - distToAttractorSurface / world.attractorAttractionDistance) * 100); //Calculate acceleration based on distance
+                addForce(obj, angleToAttractor, acceleration); //Add the force to the obj
             }
-        } else {
-            cell.force.x -= (cell.force.x * world.globalFriction) * delta;
-            cell.force.y -= (cell.force.y * world.globalFriction) * delta;
         }
     }
 }
-
-function applyForceCutoff(cell) {
-    if (cell.force.x < world.forceCutOff && cell.force.x > -world.forceCutOff) cell.force.x = 0;
-    if (cell.force.y < world.forceCutOff && cell.force.y > -world.forceCutOff) cell.force.y = 0;
+function applyMassDecay(obj) { //Decay the mass of the obj
+    if (obj.mass !== world.minMass) { //If not too small already, remove mass based on mass loss rate
+        var newMass = obj.mass - (obj.mass * world.massDecay) * delta;
+        if (newMass < world.minMass) newMass = world.minMass;
+        setMass(obj, newMass); //Set the new mass of the obj
+    }
+}
+function updatePosition(obj) { //Move obj according to force applied
+    obj.position.x += obj.force.x * delta; //Apply force multiplied by delta to x. Keeps the movement stable in case of lagg.
+    obj.position.y += obj.force.y * delta; //Apply force multiplied by delta to y.
+    detectAndResolveCollisions(obj); //Resolve any collisions as a result of the new position
+    if (isServer) {
+        updatedObjs.push(obj); //Flag objs as updated
+    }
 }
 
-function updatePosition(cell) {
-    cell.position.x += cell.force.x * delta;
-    cell.position.y += cell.force.y * delta;
+
+
+//***COLLISION DETECTION ***/
+function detectAndResolveCollisions(obj) {
+    var objPairs = getCollidingObjects(obj); //Get any collisions with this obj. Comes in pairs
+    // EG:
+    // objPairs => [
+    //     [objA, objB],
+    //     [objA, objB2],
+    //     [objA, objB3],
+    //     etc...
+    // ]
+    if (objPairs) { //If there are colliding objs
+        for (i in objPairs) {
+            var oPair = objPairs[i];
+            // oPair => [objA, objB]
+            events.trigger("collision", oPair);
+        }
+    }
+    var objWallCollisions = detectobjToWallCollision(obj); //Get any collisions with the wall
+    //EG:
+    //objWallCollisions => {
+    //  [obj: obj, axis: "x", collisionDepth: collisionDepth, 
+    //  obj: obj, axis: "y", collisionDepth: collisionDepth]
+    //}
+    if (objWallCollisions) {
+        handleobjToWallCollision(objWallCollisions);
+    }
 }
 
+
+function getCollidingObjects(objA) {
+    var collidingobjs = [];
+    var keys = Object.keys(world.objs); //get all of the objs by key
+    //Against all objs
+    for (iB in keys) {
+        var objB = world.objs[keys[iB]];
+        //compare non matching objs, and exclude already checked objs.
+        if (objA.id != objB.id) { //don't check against self
+            var collidingobjPair = detectCircleToCircleCollision(objA, objB); //check for collision between circles
+            if (collidingobjPair) { //if collisions
+                objA.isColliding = true; //flag it as colliding
+                collidingobjs.push(collidingobjPair); //add to collision list
+            }
+        }
+    }
+    return collidingobjs; // return collision list
+}
+function detectCircleToCircleCollision(objA, objB) { //check for collision between circles
+    var radiusAdded = objA.radius + objB.radius;
+    var collisionDepth = getDistanceBetweenObjs(objA, objB); //If distance is less than radius added together a collision is occuring
+    if (collisionDepth < radiusAdded) return { objA: objA, objB: objB, collisionDepth: collisionDepth };
+    return false;
+}
+function detectobjToWallCollision(obj) { //check for collision of the wall
+    var collisonAxi = [];
+    if (obj.position.x <= obj.radius || obj.position.x >= world.width - obj.radius) { //Is object colling with wall on x axis
+        var collisionDepth = 0;
+        if (obj.position.x <= obj.radius) { //Calculate collision depth
+            collisionDepth = obj.position.x - obj.radius;
+        } else {
+            collisionDepth = obj.position.x - world.width + obj.radius;
+        }
+        collisonAxi.push({
+            obj: obj,
+            axis: "x",
+            collisionDepth: collisionDepth
+        }); //Register collision on x axis
+    }
+    if (obj.position.y <= obj.radius || obj.position.y >= world.height - obj.radius) { //Is object colling with wall on y axis
+        var collisionDepth = 0;
+        if (obj.position.y <= obj.radius) { //Calculate collision depth
+            collisionDepth = obj.position.y - obj.radius;
+        } else {
+            collisionDepth = obj.position.y - world.height + obj.radius;
+        }
+        collisonAxi.push({
+            obj: obj,
+            axis: "y",
+            collisionDepth: collisionDepth
+        }); //Register collision on y axis
+    }
+    return collisonAxi;
+}
+function resolveCircles(c1, c2, transferForce = true) { //Fix colliding circles
+    let distance_x = c1.position.x - c2.position.x;
+    let distance_y = c1.position.y - c2.position.y;
+    let radii_sum = c1.radius + c2.radius;
+    let distance = getDistanceBetweenObjs(c1, c2);
+    let unit_x = distance_x / distance;
+    let unit_y = distance_y / distance;
+
+    c1.position.x = c2.position.x + (radii_sum) * unit_x; //Uncollide
+    c1.position.y = c2.position.y + (radii_sum) * unit_y; //Uncollide
+    if (transferForce) { //Transfer force from collision
+        var massSum = c1.mass + c2.mass;
+        var newVelX1 = (c1.force.x * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.x)) / massSum;
+        var newVelY1 = (c1.force.y * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.y)) / massSum;
+        var newVelX2 = (c2.force.x * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.x)) / massSum;
+        var newVelY2 = (c2.force.y * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.y)) / massSum;
+        c1.force.x = newVelX1;
+        c1.force.y = newVelY1;
+        c2.force.x = newVelX2;
+        c2.force.y = newVelY2;
+    }
+}
+function handleobjToWallCollision(objCollisions) { //Correct a wall collision
+    for (i in objCollisions) { //Loop through collisions
+        var objCollision = objCollisions[i];
+        objCollision.obj.position[objCollision.axis] -= objCollision.collisionDepth; //Uncollide
+        if (objCollision.obj.type === world.objTypes.player) { //Remove forces on axis collision with wall
+            objCollision.obj.force[objCollision.axis] = 0;
+        } else {
+            objCollision.obj.force[objCollision.axis] = -objCollision.obj.force[objCollision.axis];
+        }
+    }
+}
+function spawnPlayer(socket) { //Spawn and intialize player vars
+    var spawnPos = getRandomSpawn(world.playerSpawnSize); //Get random spawn without collisions
+    var playerObj = addObj(spawnPos.x, spawnPos.y, world.playerSpawnSize, "blue", world.objTypes.player, socket); //Spawn player obj, pass socket along for setup
+    players[socket.playerId].socket = socket; //Track player cells in special cell tracking
+    players[socket.playerId].focusedObjId = playerObj.id; //Track player cells in special cell tracking
+    sendPlayerFocusedObj(playerObj.playerId); //Tell client the current focused Obj
+    sendPlayerObjs(playerObj.playerId); //Tell client about about all player cells
+    log("Player '" + socket.username + "' has spawned!", false, "Osmosis");
+    socket.isPlaying = true; //Flag the socket as playing
+    return playerObj;
+}
+function sendPlayerObjs(playerId) { //sends all the current player objs to player
+    players[playerId].socket.emit("getPlayersObjIds", players[playerId].objs);
+}
+function sendPlayerFocusedObj(playerId) { //sends the current focused obj id to player
+    players[playerId].socket.emit("getFocusedObjId", players[playerId].focusedObjId);
+}
+
+function spawnRandomFoodobj() {
+    var foodSize = getRandomInt(world.minFoodSize, world.maxFoodSize); //Randomize food size 
+    var spawnPos = getRandomSpawn(foodSize); //Get new spawn point without colliding
+    addObj(spawnPos.x, spawnPos.y, foodSize, "transparent"); //Adding 
+    foodCount++;
+}
+function spawnRandomBlackHole() { //Spawn a random black hole
+    var spawnPos = getRandomSpawn(world.blackHoleSpawnSize); //Get new spawn point without colliding
+    addObj(spawnPos.x, spawnPos.y, world.blackHoleSpawnSize, "black", world.objTypes.blackhole); //Add blackhole to world
+    blackHoleCount++;   //Keep track of blackholes
+}
+function addObj(x, y, mass, color, type = world.objTypes.food, socket) {
+    var nObj = {};
+    //Setup new object
+    nObj.id = generateId();
+    nObj.type = type;
+    nObj.position = {
+        x: x,
+        y: y
+    };
+    nObj.force = {
+        x: 0,
+        y: 0
+    };
+    nObj.speed = 0;
+    nObj.angle = 0;
+    nObj.mergeTime = 0;
+    nObj.isStatic = false;
+    nObj.ignoreGlobalFriction = false;
+    nObj.canMerge = false;
+    nObj.isColliding = false;
+    nObj.isAttractor = false;
+    nObj.graphics = {
+        color: color
+    };
+    setMass(nObj, mass); //Set initial mass
+    if (socket) { //Pass socket data to object like player id etc
+        nObj.playerId = socket.playerId;
+        if (!players[socket.playerId]) {
+            players[socket.playerId] = { objs: {} };
+        }
+        //addplayer obj to list
+        players[socket.playerId].objs[nObj.id] = true;
+        nObj.graphics.texture = socket.profilePicture;
+        nObj.name = socket.username;
+        nObj.distToMouse = 0;
+    }
+    if (nObj.type == world.objTypes.blackhole) { //Black hole specific setup
+        nObj.isAttractor = true; //Flag as attractor
+        nObj.ignoreGlobalFriction = true; //prevent blackhole from slowing down
+        attractors[nObj.id] = nObj; //Add it to the attractors list
+        setForce(nObj, getRandomAngle(), getRandomInt(world.blackHoleMinSpawnSpeed, world.blackHoleMaxSpawnSpeed)); //Give a random force to blackhole
+    }
+    world.objs[nObj.id] = nObj;//Put object in world
+    updatedObjs.push(nObj); //Keep track of updated objects
+    return nObj;
+}
+
+function removeobj(obj) {
+    if (obj.type === world.objTypes.player) {
+        var pid = obj.playerId;
+        if (players[pid] && players[pid].objs[obj.id]) {
+            //Update cell tracking for client
+            var playerObjs = getAllPlayerObjs(pid);
+            var largestObj = getLargestobj(playerObjs);
+            players[pid].focusedObjId = largestObj.id;
+            sendPlayerObjs(pid);
+            sendPlayerFocusedObj(pid);
+            if (!Object.keys(players[pid].objs).length) {//If no more cells exist for player, emit death event
+                players[pid].socket.emit("playerDied");
+                players[pid].socket.isPlaying = false;
+            }
+            delete players[pid].objs[obj.id]; //Remove player from player list
+        }
+    } else if (obj.type === world.objTypes.blackhole) {
+        blackHoleCount--; //Keep track of blackhole count
+    } else if (obj.type === world.objTypes.food) {
+        foodCount--; //Keep track of food count
+    }
+    if (attractors[obj.id]) {
+        delete attractors[obj.id];
+    }
+    removedObjs.push(obj);
+    delete world.objs[obj.id];
+
+}
+function detonateObj(obj) {
+    var newMass = obj.mass / world.detonationPieces;
+    var newPieces = world.detonationPieces;
+    var spawnDist = obj.radius;
+    while (newPieces) {
+        var newAngle = getRandomAngle();
+        var spawnPos = findNewPoint(obj.position, newAngle, spawnDist);
+        // var newSpawnFound = false;
+        // while (!newSpawnFound) {
+        //     var spawnPos = findNewPoint(obj.position, getRandomAngle(), spawnDist);
+        //     newSpawnFound = !testobjCollision({ position: { x: rX, y: rY }, radius: radius });
+        // }
+        var nFoodobj = addObj(spawnPos.x, spawnPos.y, newMass, "transparent");
+        setForce(nFoodobj, newAngle, 200);
+        newPieces--;
+    }
+    removeobj(obj);
+}
+function splitobjs(objs) {
+    for (i in objs) {
+        var obj = objs[i];
+        splitobj(obj);
+    }
+}
+
+function splitobj(obj) {
+    var newobjMass = obj.mass / 2;
+    if (newobjMass >= world.minMass) {
+        setMass(obj, newobjMass);
+        var spawnPos = findNewPoint(obj.position, obj.angle, (obj.radius * 2) + 1);
+        if (players[obj.playerId]) {
+            var nObj = addObj(spawnPos.x, spawnPos.y, newobjMass, obj.graphics.color, world.objTypes.player, players[obj.playerId].socket);
+            nObj.mergeTime = Date.now() + (obj.mass * world.mergeDelayScalar);
+            obj.mergeTime = Date.now() + (obj.mass * world.mergeDelayScalar);
+        } else {
+            var nObj = addObj(spawnPos.x, spawnPos.y, newobjMass, obj.graphics.color, world.objTypes.player);
+        }
+        nObj.angle = getAngle(nObj.position, obj.mousePos);
+        nObj.speed = obj.speed * 3;
+    }
+}
+
+function spitobjs(objs) {
+    for (i in objs) {
+        var obj = objs[i];
+        spitobj(obj);
+    }
+}
+
+function spitobj(obj) {
+    var newobjMass = obj.mass - world.spitMass;
+    if (newobjMass >= world.minMass) {
+        setMass(obj, newobjMass);
+        var spawnPos = findNewPoint(obj.position, obj.angle, obj.radius + world.spitMass);
+        var nObj = addObj(spawnPos.x, spawnPos.y, world.spitMass, "transparent", world.objTypes.food);
+        setForce(nObj, obj.angle, world.spitSpeed);
+    }
+}
+
+function removePlayer(playerId) {
+    var pobjs = getAllPlayerObjs(playerId);
+    for (i in pobjs) {
+        var obj = pobjs[i];
+        removeobj(obj);
+    }
+    delete players[playerId];
+}
+
+function playerOnMouseMove(playerId, mousePos) {
+    var pobjs = getAllPlayerObjs(playerId);
+    for (i in pobjs) {
+        var obj = pobjs[i];
+        //set the angle of each obj to follow the mouse
+        obj.angle = getAngle(obj.position, mousePos);
+        obj.mousePos = mousePos;
+        obj.distToMouse = getDistance(obj.position, mousePos);
+    }
+}
+
+function playerOnSplit(playerId) {
+    var pobjs = getAllPlayerObjs(playerId);
+    //split all of players objs
+    splitobjs(pobjs);
+}
+
+function playerOnSpit(playerId) {
+    var pobjs = getAllPlayerObjs(playerId);
+    //split all of players objs
+    spitobjs(pobjs);
+}
+
+function getAllPlayerObjs(playerId) {
+    var pobjs = [];
+    if (players[playerId]) {
+        for (cId in players[playerId].objs) {
+            pobjs.push(world.objs[cId]);
+        }
+    }
+    return pobjs;
+}
+
+function getLargestobj(objs) {
+    var largestobj;
+    for (i in objs) {
+        var obj = objs[i];
+        if (!largestobj) largestobj = obj;
+        if (obj.mass > largestobj.mass) {
+            largestobj = obj;
+        }
+    }
+    return largestobj;
+}
+
+function getDistanceBetweenObjs(objA, objB) {
+    return getDistance(objA.position, objB.position);
+}
+function getDistance(pos1, pos2) {
+    var a = pos1.x - pos2.x;
+    var b = pos1.y - pos2.y;
+    return Math.sqrt(a * a + b * b);
+}
+
+function getAngle(pos1, pos2) {
+    return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x) * 180 / Math.PI;
+}
+
+function findNewPoint(pos, angle, distance) {
+    var result = {};
+    result.x = Math.round(Math.cos(angle * Math.PI / 180) * distance + pos.x);
+    result.y = Math.round(Math.sin(angle * Math.PI / 180) * distance + pos.y);
+    return result;
+}
+
+function getRandomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 function getForceVector(angle, velocity) {
     return {
         x: velocity * Math.cos(angle * Math.PI / 180),
@@ -92,287 +560,346 @@ function getVelocityOfVector(forceVector) {
     return Math.sqrt(Math.pow(forceVector.x, 2) + Math.pow(forceVector.y, 2));
 }
 
-function setForceVector(cell, forceVector) {
-    cell.force.x = forceVector.x;
-    cell.force.y = forceVector.y;
+function setForceVector(obj, forceVector) {
+    obj.force.x = forceVector.x;
+    obj.force.y = forceVector.y;
 }
 
-function addForceVector(cell, forceVector) {
-    cell.force.x += forceVector.x;
-    cell.force.y += forceVector.y;
+function addForceVector(obj, forceVector) {
+    obj.force.x += forceVector.x;
+    obj.force.y += forceVector.y;
 }
 
-function setForce(cell, angle, speed) {
+function setForce(obj, angle, speed) {
     var fv = getForceVector(angle, speed);
-    setForceVector(cell, fv);
+    setForceVector(obj, fv);
 }
 
-function addForce(cell, angle, speed) {
+function addForce(obj, angle, speed) {
     var fv = getForceVector(angle, speed);
-    addForceVector(cell, fv);
-}
-function resolveCollisions() {
-    var collidingCells = getCollidingCells();
-    collidingCells.forEach(function (cellPair) {
-        handleCellToCellCollision(cellPair);
-    })
-    var wallCollidingCells = getCellsCollidingWithWall();
-    wallCollidingCells.forEach(function (cellCollisions) {
-        handleCellToWallCollision(cellCollisions);
-    })
+    addForceVector(obj, fv);
 }
 
-function getCollidingCells() {
-    var collidingCells = [];
-    var keys = Object.keys(world.cells);
-    for (iA in keys) {
-        var cellA = world.cells[keys[iA]];
-        cellA.isColliding = false;
-        //Check moving cells
-        if (isMoving(cellA)) {
-            //Against all cells
-            for (iB in keys) {
-                var cellB = world.cells[keys[iB]];
-                //compare non matching cells, and exclude already checked cells.
-                var is
-                if (iA != iB) {
-                    var collidingCellPair = detectCellToCellCollision(cellA, cellB);
-                    if (collidingCellPair) {
-                        cellA.isColliding = true;
-                        collidingCells.push(collidingCellPair);
+function addMass(obj, mass) {
+    setMass(obj, obj.mass + mass);
+}
+function takeMass(obj, mass) {
+    setMass(obj, obj.mass - mass);
+}
+function setMass(obj, mass) {
+    obj.mass = mass;
+    obj.radius = Math.sqrt(obj.mass * world.radiusScalar);
+    if (isServer) {
+        updatedObjs.push(obj);
+    }
+}
+function applyGlobalFriction(obj) {
+    obj.force.x -= (obj.force.x * world.globalFriction) * delta;
+    obj.force.y -= (obj.force.y * world.globalFriction) * delta;
+}
+function applyForceCutoff(obj) {
+    if (obj.force.x < world.forceCutOff && obj.force.x > -world.forceCutOff) obj.force.x = 0;
+    if (obj.force.y < world.forceCutOff && obj.force.y > -world.forceCutOff) obj.force.y = 0;
+}
+
+function isMoving(obj) {
+    return (obj.force.x !== 0 || obj.force.y !== 0);
+}
+
+function getRandomAngle() {
+    return getRandomInt(1, 360) - 180;
+}
+function testobjCollision(testobj) {
+    for (i in world.objs) {
+        var obj = world.objs[i];
+        var collidingobjPair = detectCircleToCircleCollision(testobj, obj);
+        if (collidingobjPair) {
+            return true;
+        }
+    }
+    return false;
+}
+function getRandomSpawn(radius) {
+    while (true) {
+        var rX = getRandomInt(radius, world.width - radius);
+        var rY = getRandomInt(radius, world.height - radius);
+        var testobj = { position: { x: rX, y: rY }, radius: radius };
+        if (!testobjCollision(testobj)) {
+            return {
+                x: rX,
+                y: rY
+            };
+        }
+    }
+}
+
+function generateId() {
+    var timestamp = (new Date().getTime() / 1000 | 0).toString(16);
+    return timestamp + 'xxxxxxxxxxxxxxxx'.replace(/[x]/g, function () {
+        return (Math.random() * 16 | 0).toString(16);
+    }).toLowerCase();
+}
+function fillWorldWithFood() {
+    log("Filling world with food...", false, "Osmosis");
+    while (foodCount < world.maxFoodCount) {
+        spawnRandomFoodobj();
+    }
+    log("Food spawning complete!", false, "Osmosis");
+}
+function init(plugins, servSettings, events, serverio, serverLog, commands) {
+    io = serverio;
+    log = serverLog;
+    serverSettings = servSettings;
+    function loadThemes() {
+        log("Loading themes...", false, "Osmosis");
+        var ThemesPath = __dirname + "/Themes.json";
+        if (fs.existsSync(ThemesPath)) {
+            Themes = DB.load(ThemesPath);
+        } else {
+            Themes = {
+                "Osmosis": {
+                    "cellBorderTexture": {
+                        "src": "/img/themes/Osmosis/seemlessRainbow.jpg"
+                    },
+                    "foodBorderTexture": {
+                        "src": "/img/themes/Osmosis/seemlessWater.jpg"
+                    },
+                    "blackHoleBorderTexture": {
+                        "src": "/img/themes/Osmosis/seemlessSpace.jpg"
+                    },
+                    "bubbleBorderTexture": {
+                        "src": "/img/themes/Osmosis/seemlessRainbow.jpg"
                     }
                 }
             }
+            DB.save(ThemesPath, Themes);
+            log("Themes file not found, generating dafults...", false, "Osmosis");
         }
-
+        io.emit("getThemes", Themes);
+        log("Themes loaded!", false, "Osmosis");
     }
-    return collidingCells;
+    function loadSkins() {
+        log("Loading skins...", false, "Osmosis");
+        skinUrls = [];
+        readdirp(serverSettings.webRoot + "/img/skins/", {
+            type: 'files',
+            fileFilter: ['*.png'],
+            directoryFilter: ['!.git'],
+            depth: 2
+        }).on('data', (fileInfo) => {
+            skinUrls.push("./img/skins/" + fileInfo.path);
+        }).on('end', () => {
+            io.emit("getSkins", skinUrls);
+            log("Skins loaded! Found " + skinUrls.length + " skins.", false, "Osmosis");
+        });
+    }
+    log("Starting game engine...", false, "Osmosis");
+    loadSkins();
+    loadThemes();
+    fillWorldWithFood();
+    gameLoop();
+    log("Engine running!", false, "Osmosis");
+    events.on("connection", function (socket) {
+        socket.playerId = generateId();
+        socket.isPlaying = false;
+        socket.emit("getPlayerId", socket.playerId); //Tell client their player id
+        socket.emit("worldData", world);
+        socket.on("disconnect", function () {
+            //make sure user is playing
+            if (socket.playerId) {
+                removePlayer(socket.playerId);
+            }
+        });
+        socket.on("mouseMove", function (mousePos) {
+            //validate input and make sure user is playing
+            if (socket.isPlaying && mousePos && mousePos.y && mousePos.x) {
+                playerOnMouseMove(socket.playerId, mousePos);
+            }
+        });
+        socket.on("split", function () {
+            //make sure user is playing
+            if (socket.isPlaying) {
+                playerOnSplit(socket.playerId);
+            }
+        });
+        socket.on("spit", function () {
+            //make sure user is playing
+            if (socket.isPlaying) {
+                playerOnSpit(socket.playerId);
+            }
+        });
+
+        socket.on("spawn", function () {
+            var playerobj = spawnPlayer(socket);
+        });
+        socket.on("getSkins", function () {
+            socket.emit("getSkins", skinUrls);
+        });
+        socket.on("getThemes", function () {
+            socket.emit("getThemes", Themes);
+        });
+
+    });
+    commands.reloadThemes = {
+        usage: "reloadThemes",
+        help: "Reloads the themes for osmosis.",
+        do: function (args, fullMessage) {
+            loadThemes();
+        }
+    }
+    commands.reloadSkins = {
+        usage: "reloadSkins",
+        help: "Reloads the skins for osmosis.",
+        do: function (args, fullMessage) {
+            loadSkins();
+        }
+    }
 }
 
-function getCellsCollidingWithWall() {
-    var collidingCells = [];
-    for (i in world.cells) {
-        var cell = world.cells[i];
-        if (isMoving(cell)) {
-            var cellCollision = detectCellToWallCollision(cell);
-            if (cellCollision) {
-                collidingCells.push(cellCollision);
+
+
+var events = {
+    "collision": [],
+    "on": function (event, callback) {
+        if (this[event] && event != "trigger" && event != "on" && event != "addEvent") {
+            this[event].push(callback);
+        } else {
+            log("Event '" + event + "' is not found.", true, "Server");
+        }
+    },
+    "addEvent": function (event) {
+        if (!this[event] && event != "trigger" && event != "on" && event != "addEvent") {
+            this[event] = [];
+        } else {
+            log("Event '" + event + "' already exists.", true, "Server");
+        }
+    },
+    "trigger": function (event, params = null) {
+        if (this[event] && event != "trigger" && event != "on" && event != "addEvent") {
+            for (i in this[event]) {
+                this[event][i](params);
+            }
+        } else {
+            log("Event '" + event + "' is not found.", true, "Server");
+        }
+    }
+};
+
+//***GAME LOGIC ***/
+events.on("collision", function (objPair) {
+    //eat the smaller obj
+    if (objPair.objA.type === world.objTypes.food && objPair.objB.type === world.objTypes.food) {
+        resolveCircles(objPair.objA, objPair.objB); //resolve collision and transfer force
+        return;
+    }
+    if (objPair.objA.type == world.objTypes.player && objPair.objB.type == world.objTypes.player && objPair.objA.playerID == objPair.objB.playerID && (!objPair.objA.canMerge || !objPair.objB.canMerge)) {
+        resolveCircles(objPair.objA, objPair.objB, false); //Resolve collision and disable force transfer
+        return;
+    }
+    if (isServer) { //Server Side Only
+        if (objPair.objA.mass > objPair.objB.mass) {
+            var bigObj = objPair.objA
+            var smallObj = objPair.objB
+        } else {
+            var bigObj = objPair.objB
+            var smallObj = objPair.objA
+        }
+        if (bigObj.type === world.objTypes.player) {
+            if (smallObj.type === world.objTypes.blackhole) {
+                var massToTake = bigObj.mass * world.blackHoleMassSuckScalar;
+                takeMass(bigObj, massToTake);
+                addMass(smallObj, massToTake);
+            } else {
+                //if obj is halfway over the target obj.
+                var eatDepth = bigObj.radius + objPair.objB.radius / 2;
+                if (getDistanceBetweenObjs(bigObj, objPair.objB) <= eatDepth) {
+                    eatCell(bigObj, smallObj);
+                }
+            }
+        } else if (bigObj.type === world.objTypes.blackhole) {
+            var eatDepth = bigObj.radius + smallObj.radius / 2;
+            if (getDistanceBetweenObjs(bigObj, smallObj) <= eatDepth) {
+                eatCell(bigObj, smallObj);
+            }
+            if (bigObj.mass > world.blackHoleExplosionMass) {
+                detonateObj(bigObj)
             }
         }
     }
-    return collidingCells;
-}
-
-function detectCellToCellCollision(cellA, cellB) {
-    var radiusAdded = cellA.radius + cellB.radius;
-    var collisionDepth = getDistanceBetweenCells(cellA, cellB);
-    if (collisionDepth < radiusAdded) return { cellA: cellA, cellB: cellB, collisionDepth: collisionDepth };
-    return false;
-}
-
-function detectCellToWallCollision(cell) {
-    var collisonAxi = [];
-    if (cell.position.x <= cell.radius || cell.position.x >= world.width - cell.radius) {
-        var collisionDepth = 0;
-        if (cell.position.x <= cell.radius) {
-            collisionDepth = cell.position.x - cell.radius;
-        } else {
-            collisionDepth = cell.position.x - world.width + cell.radius;
-        }
-        collisonAxi.push({
-            cell: cell,
-            axis: "x",
-            collisionDepth: collisionDepth
-        });
-    }
-    if (cell.position.y <= cell.radius || cell.position.y >= world.height - cell.radius) {
-        var collisionDepth = 0;
-        if (cell.position.y <= cell.radius) {
-            collisionDepth = cell.position.y - cell.radius;
-        } else {
-            collisionDepth = cell.position.y - world.height + cell.radius;
-        }
-        collisonAxi.push({
-            cell: cell,
-            axis: "y",
-            collisionDepth: collisionDepth
-        });
-    }
-    return collisonAxi;
-}
-
-function handleCellToCellCollision(cellPair) {
-    //eat the smaller cell
-    if (cellPair.cellA.type === world.cellTypes.food && cellPair.cellB.type === world.cellTypes.food) {
-        resolveCircles(cellPair.cellA, cellPair.cellB);
-        return;
-    }
-    if (cellPair.cellA.type == world.cellTypes.player && cellPair.cellB.type == world.cellTypes.player && cellPair.cellA.playerID == cellPair.cellB.playerID && (!cellPair.cellA.canMerge || !cellPair.cellB.canMerge)) {
-        resolveCircles(cellPair.cellA, cellPair.cellB);
-        return;
-    }
-    //Server Side Only
-    // if (cellPair.cellA.mass > cellPair.cellB.mass && (cellPair.cellA.type === world.cellTypes.player || cellPair.cellA.type === world.cellTypes.blackhole)) {
-    //     //if cell is halfway over the target cell.
-    //     var eatDepth = cellPair.cellA.radius + cellPair.cellB.radius / 2;
-    //     if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
-    //         addMass(cellPair.cellA, cellPair.cellB.mass);
-    //         cellPair.cellB.mass = 0; //prevent double mass gain
-    //         removeCell(cellPair.cellB);
-    //         if (cellPair.cellA.type === world.cellTypes.blackhole) {
-    //             if (cellPair.cellA.mass > world.blackHoleExplosionMass) {
-    //                 detonateCell(cellPair.cellA)
-    //             }
-    //         }
-    //     }
-    //     return;
-    // } else if (cellPair.cellB.type === world.cellTypes.player || cellPair.cellB.type === world.cellTypes.blackhole) {
-    //     //if cell is halfway over the target cell.
-    //     var eatDepth = cellPair.cellA.radius / 2 + cellPair.cellB.radius;
-    //     if (getDistanceBetweenCells(cellPair.cellA, cellPair.cellB) <= eatDepth) {
-    //         addMass(cellPair.cellB, cellPair.cellA.mass);
-    //         //prevent double mass gain
-    //         cellPair.cellA.mass = 0;
-    //         removeCell(cellPair.cellA);
-    //         if (cellPair.cellB.type === world.cellTypes.blackhole) {
-    //             if (cellPair.cellB.mass > world.blackHoleExplosionMass) {
-    //                 detonateCell(cellPair.cellB)
-    //             }
-    //         }
-    //     }
-    //     return;
-    // }
-}
-function resolveCircles(c1, c2) {
-    let distance_x = c1.position.x - c2.position.x;
-    let distance_y = c1.position.y - c2.position.y;
-    let radii_sum = c1.radius + c2.radius;
-    let length = getDistanceBetweenCells(c1, c2);
-    let unit_x = distance_x / length;
-    let unit_y = distance_y / length;
-    c1.position.x = c2.position.x + (radii_sum) * unit_x;
-    c1.position.y = c2.position.y + (radii_sum) * unit_y;
-    var massSum = c1.mass + c2.mass;
-    var newVelX1 = (c1.force.x * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.x)) / massSum;
-    var newVelY1 = (c1.force.y * (c1.mass - c2.mass) + (2 * c2.mass * c2.force.y)) / massSum;
-    var newVelX2 = (c2.force.x * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.x)) / massSum;
-    var newVelY2 = (c2.force.y * (c2.mass - c1.mass) + (2 * c1.mass * c1.force.y)) / massSum;
-    c1.force.x = newVelX1;
-    c1.force.y = newVelY1;
-    c2.force.x = newVelX2;
-    c2.force.y = newVelY2;
-}
-
-function handleCellToWallCollision(cellCollisions) {
-    for (i in cellCollisions) {
-        var cellCollision = cellCollisions[i];
-        cellCollision.cell.position[cellCollision.axis] -= cellCollision.collisionDepth;
-        if (cellCollision.cell.type === world.cellTypes.player) {
-            cellCollision.cell.force[cellCollision.axis] = 0;
-        } else {
-            cellCollision.cell.force[cellCollision.axis] = -cellCollision.cell.force[cellCollision.axis];
-        }
-    }
-}
-function getAllPlayerCells() {
-    var playerCells = [];
-    for (i in playersCells) {
-        if (world.cells[playersCells[i]]) {
-            playerCells.push(world.cells[playersCells[i]]);
-        }
-    }
-    return playerCells;
-}
-function getDistanceBetweenCells(cellA, cellB) {
-    return getDistance(cellA.position, cellB.position);
-}
-function getDistance(pos1, pos2) {
-    var a = pos1.x - pos2.x;
-    var b = pos1.y - pos2.y;
-    return Math.sqrt(a * a + b * b);
-}
-function getAngle(pos1, pos2) {
-    return Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x) * 180 / Math.PI;
-}
-function gameLoop() {
-    loopStart();
-    updateCells();
-    //resolveCollisions();
-    var elapsedTime = loopEnd();
-    //console.log(elapsedTime);
-    setTimeout(gameLoop, 10);
-}
-
-socket.on("worldData", function (worldData) {
-    world = worldData;
-    gameLoop();
 });
-
-socket.on("worldUpdate", function (worldData) {
-    for (i in worldData.updatedCells) {
-        var uCell = worldData.updatedCells[i];
-        world.cells[uCell.id] = uCell;
-    }
-    for (i in worldData.removedCells) {
-        var rCell = worldData.removedCells[i];
-        delete world.cells[rCell.id];
-    }
-});
-
-socket.on("getFocusedCellId", function (cellId) {
-    focusedCellId = cellId;
-});
-
-socket.on("getPlayersCellIds", function (nPlayersCells) {
-    playersCells = nPlayersCells;
-});
-socket.on("getPlayerId", function (nPid) {
-    pid = nPid;
-})
-var mousePos = {
-    x: 0,
-    y: 0
-};
-var mousePosRelative
-var mouseMoved = false;
-window.onmousemove = trackMouseMove;
-
-function trackMouseMove(event) {
-    mousePos = {
-        x: event.clientX / canvasZoom,
-        y: event.clientY / canvasZoom
-    }
+function eatCell(cellA, preyCell) {
+    addMass(cellA, preyCell.mass);
+    preyCell.mass = 0; //prevent double mass gain
+    removeobj(preyCell);
 }
+if (isServer) {
+    module.exports.init = init;
+} else {
+    //***CLIENT CODE***/
+    socket.on("worldData", function (worldData) {
+        world = worldData;
+        gameLoop();
+    });
+    socket.on("worldUpdate", function (worldData) {
+        for (i in worldData.updatedObjs) {
+            var uObj = worldData.updatedObjs[i];
+            world.objs[uObj.id] = uObj;
+        }
+        for (i in worldData.removedObjs) {
+            var rObj = worldData.removedObjs[i];
+            delete world.objs[rObj.id];
+        }
+    });
 
-setInterval(function () {
-    if (isPlaying) {
-        mousePosRelative = {
-            x: mousePos.x - canvasTranslation.x,
-            y: mousePos.y - canvasTranslation.y
-        };
-        socket.emit("mouseMove", mousePosRelative);
-    }
-}, 20);
+    socket.on("getFocusedObjId", function (objId) {
+        focusedObjId = objId;
+    });
 
-var pressedKeys = {};
-window.onkeydown = keyDown;
-window.onkeyup = keyUp;
-
-function keyDown(event) {
-    var keyCode = event.which || event.keyCode;
-    if (!pressedKeys[keyCode]) {
-        pressedKeys[keyCode] = true;
-        if (keyCode == 32) { //space
-            socket.emit("split");
-        } else if (keyCode == 87) {
-            socket.emit("spit");
+    socket.on("getPlayersObjIds", function (nPlayersObjs) {
+        playersObjs = nPlayersObjs;
+    });
+    socket.on("getPlayerId", function (nPid) {
+        pid = nPid;
+    })
+    var mousePos = {
+        x: 0,
+        y: 0
+    };
+    var mousePosRelative
+    function trackMouseMove(event) {
+        mousePos = {
+            x: event.clientX / canvasZoom,
+            y: event.clientY / canvasZoom
         }
     }
-}
-
-function keyUp(event) {
-    var keyCode = event.which || event.keyCode;
-    if (pressedKeys[keyCode]) {
-        pressedKeys[keyCode] = false;
+    window.onmousemove = trackMouseMove;
+    setInterval(function () {
+        if (isPlaying) {
+            mousePosRelative = {
+                x: mousePos.x - canvasTranslation.x,
+                y: mousePos.y - canvasTranslation.y
+            };
+            socket.emit("mouseMove", mousePosRelative);
+        }
+    }, 20);
+    var pressedKeys = {};
+    window.onkeydown = keyDown;
+    window.onkeyup = keyUp;
+    function keyDown(event) {
+        var keyCode = event.which || event.keyCode;
+        if (!pressedKeys[keyCode]) {
+            pressedKeys[keyCode] = true;
+            if (keyCode == 32) { //space
+                socket.emit("split");
+            } else if (keyCode == 87) {
+                socket.emit("spit");
+            }
+        }
+    }
+    function keyUp(event) {
+        var keyCode = event.which || event.keyCode;
+        if (pressedKeys[keyCode]) {
+            pressedKeys[keyCode] = false;
+        }
     }
 }

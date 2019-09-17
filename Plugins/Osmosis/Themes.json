@@ -1,10 +1,13 @@
 {
 	"Osmosis": {
 		"cellBorderTexture": {
-			"src": "/img/themes/Osmosis/seemlessSpace.jpg"
+			"src": "/img/themes/Osmosis/seemlessRainbow.jpg"
 		},
 		"foodBorderTexture": {
 			"src": "/img/themes/Osmosis/seemlessWater.jpg"
+		},
+		"blackHoleBorderTexture": {
+			"src": "/img/themes/Osmosis/seemlessSpace.jpg"
 		},
 		"bubbleBorderTexture": {
 			"src": "/img/themes/Osmosis/seemlessRainbow.jpg"

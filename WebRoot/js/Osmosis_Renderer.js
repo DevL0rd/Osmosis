@@ -1,9 +1,11 @@
 
-var gDebug = true;
+
+var debug = true;
+var debugGraphics = true;
 var debugCulling = false;
 var debugBlackholeFinder = true;
 var debugAttractorRadius = true;
-Graphics.newGraphics("gameCanvas", "2d", renderFrame, gDebug);
+Graphics.newGraphics("gameCanvas", "2d", renderFrame, debugGraphics);
 
 var currentTheme = "Osmosis"
 var canvasTranslation = {
@@ -42,7 +44,7 @@ function loadThemeData() {
             }
         }
         if (!allSourcesLoaded) {
-            setTimeout(loadThemeData, 200);
+            setTimeout(loadThemeData, 40);
         } else {
             themeLoaded = true;
         }
@@ -56,52 +58,52 @@ function renderFrame(canvas, context) {
         patternContext = context;
     }
 
-    if (focusedCellId && world.cells[focusedCellId]) {
-        var nz = 1 - (world.cells[focusedCellId].mass / maxZoomMass);
+    if (focusedObjId && world.objs[focusedObjId]) {
+        var nz = 1 - (world.objs[focusedObjId].mass / maxZoomMass);
         context.zoomTo(nz);
         canvasZoom = nz;
-        context.moveCameraTo(world.cells[focusedCellId].position);
+        context.moveCameraTo(world.objs[focusedObjId].position);
     }
     canvasTranslation = context.translation;
     context.strokeStyle = "red";
     context.strokeRect(0, 0, world.width, world.height);
 
-    renderCells(world.cells, context);
-    //render forground player cells
+    renderObjs(world.objs, context);
+    //render forground player objs
     this.QueueFrame();
 }
 
-function renderCells(cells, context) {
+function renderObjs(objs, context) {
 
-    for (i in cells) {
-        var cell = cells[i];
-        var zRad = (cell.radius * context.zoom);
-        if (cell.position.x + zRad + canvasTranslation.x > 0 && cell.position.x - zRad + canvasTranslation.x < window.innerWidth / context.zoom) {
-            if (cell.position.y + canvasTranslation.y > 0 && cell.position.y + canvasTranslation.y < + window.innerHeight / context.zoom) {
-                renderCell(cell, context);
-            } else if (gDebug && debugCulling) {
+    for (i in objs) {
+        var obj = objs[i];
+        var zRad = (obj.radius * context.zoom);
+        if (obj.position.x + zRad + canvasTranslation.x > 0 && obj.position.x - zRad + canvasTranslation.x < window.innerWidth / context.zoom) {
+            if (obj.position.y + canvasTranslation.y > 0 && obj.position.y + canvasTranslation.y < + window.innerHeight / context.zoom) {
+                renderObj(obj, context);
+            } else if (debug && debugCulling) {
                 context.beginPath();
-                context.moveTo(cell.position.x, cell.position.y - zRad - 50);
-                context.lineTo(cell.position.x, cell.position.y + zRad + 50);
+                context.moveTo(obj.position.x, obj.position.y - zRad - 50);
+                context.lineTo(obj.position.x, obj.position.y + zRad + 50);
                 context.strokeStyle = "red";
                 context.lineWidth = 5;
                 context.stroke();
                 context.closePath();
             }
-        } else if (gDebug && debugCulling) {
+        } else if (debug && debugCulling) {
             context.beginPath();
-            context.moveTo(cell.position.x - zRad - 50, cell.position.y);
-            context.lineTo(cell.position.x + zRad + 50, cell.position.y);
+            context.moveTo(obj.position.x - zRad - 50, obj.position.y);
+            context.lineTo(obj.position.x + zRad + 50, obj.position.y);
             context.strokeStyle = "red";
             context.lineWidth = 5;
             context.stroke();
             context.closePath();
         }
-        if (focusedCellId && world.cells[focusedCellId]) {
-            if (debugBlackholeFinder && cell.type === world.cellTypes.blackhole) {
+        if (focusedObjId && world.objs[focusedObjId]) {
+            if (debug && debugBlackholeFinder && obj.type === world.objTypes.blackhole) {
                 context.beginPath();
-                context.moveTo(world.cells[focusedCellId].position.x, world.cells[focusedCellId].position.y);
-                context.lineTo(cell.position.x, cell.position.y);
+                context.moveTo(world.objs[focusedObjId].position.x, world.objs[focusedObjId].position.y);
+                context.lineTo(obj.position.x, obj.position.y);
                 context.strokeStyle = "purple";
                 context.lineWidth = 5;
                 context.stroke();
@@ -112,28 +114,27 @@ function renderCells(cells, context) {
 }
 var skinCache = {};
 var textures = {}
-function renderCell(cell, context) {
+function renderObj(obj, context) {
     //cache unloaded graphics and flag when they are loaded
-    var drawBasicCell = true; //set to false if can render with textures
-    if (cell.graphics.texture) {
-        if (!skinCache[cell.graphics.texture]) {
+    if (obj.graphics.texture) {
+        if (!skinCache[obj.graphics.texture]) {
             var newTexture = new Image();
-            newTexture.src = cell.graphics.texture;
-            skinCache[cell.graphics.texture] = { isLoaded: false, texture: newTexture };
+            newTexture.src = obj.graphics.texture;
+            skinCache[obj.graphics.texture] = { isLoaded: false, texture: newTexture };
             newTexture.onload = function () {
                 skinCache[this.getAttribute('src')].isLoaded = true;
             };
         } else {
-            //If the cell has a skin loaded, draw it, else draw a basic cell
-            if (skinCache[cell.graphics.texture].isLoaded) {
+            //If the obj has a skin loaded, draw it, else draw a basic obj
+            if (skinCache[obj.graphics.texture].isLoaded) {
                 context.save();
                 context.beginPath();
-                context.arc(cell.position.x, cell.position.y, cell.radius, 0, 2 * Math.PI);
+                context.arc(obj.position.x, obj.position.y, obj.radius, 0, 2 * Math.PI);
                 context.clip();
-                var wh = cell.radius * 2;
-                var ro = cell.radius
-                context.drawImage(skinCache[cell.graphics.texture].texture, cell.position.x - ro, cell.position.y - ro, wh, wh);
-                context.strokeStyle = cell.graphics.color;
+                var wh = obj.radius * 2;
+                var ro = obj.radius
+                context.drawImage(skinCache[obj.graphics.texture].texture, obj.position.x - ro, obj.position.y - ro, wh, wh);
+                context.strokeStyle = obj.graphics.color;
                 context.lineWidth = 12;
                 context.fillStyle = "white";
                 if (themeLoaded) {
@@ -142,17 +143,17 @@ function renderCell(cell, context) {
                 }
                 context.stroke();
                 context.closePath();
-                if (cell.type === world.cellTypes.player) {
-                    context.font = "bold " + cell.radius * 0.5 + "px Verdana";
-                    var nameX = cell.position.x - context.measureText(cell.name).width / 2;
-                    context.fillText(cell.name, nameX, cell.position.y);
+                if (obj.type === world.objTypes.player) {
+                    context.font = "bold " + obj.radius * 0.5 + "px Verdana";
+                    var nameX = obj.position.x - context.measureText(obj.name).width / 2;
+                    context.fillText(obj.name, nameX, obj.position.y);
                     context.fillStyle = "rgba(255, 255, 255, 0.6)";
-                    context.fillText(cell.name, nameX, cell.position.y);
-                    context.font = "bold " + cell.radius * 0.25 + "px Verdana";
-                    var massRounded = Math.round(cell.mass);
+                    context.fillText(obj.name, nameX, obj.position.y);
+                    context.font = "bold " + obj.radius * 0.25 + "px Verdana";
+                    var massRounded = Math.round(obj.mass);
                     var massTextMeasured = context.measureText(massRounded)
-                    var massX = cell.position.x - massTextMeasured.width / 2;
-                    var massY = cell.position.y + cell.radius * 0.5
+                    var massX = obj.position.x - massTextMeasured.width / 2;
+                    var massY = obj.position.y + obj.radius * 0.5
                     context.fillStyle = "white";
                     if (themeLoaded) {
                         context.fillStyle = ThemeCache[Themes[currentTheme].cellBorderTexture.src].pattern;
@@ -162,27 +163,31 @@ function renderCell(cell, context) {
                     context.fillText(massRounded, massX, massY);
                 }
                 context.restore();
-                drawBasicCell = false;// already fancy drew it
+                return;
             }
         }
     }
-    if (drawBasicCell) {
-        context.beginPath();
-        context.arc(cell.position.x, cell.position.y, cell.radius, 0, 2 * Math.PI);
-        context.fillStyle = cell.graphics.color;
-        if (themeLoaded) {
-            context.strokeStyle = ThemeCache[Themes[currentTheme].foodBorderTexture.src].pattern;
+    //draw a basic obj
+    context.beginPath();
+    context.arc(obj.position.x, obj.position.y, obj.radius, 0, 2 * Math.PI);
+    context.fillStyle = obj.graphics.color;
+    if (themeLoaded) {
+        if (obj.type == world.objTypes.blackhole) {
+            context.strokeStyle = ThemeCache[Themes[currentTheme].blackHoleBorderTexture.src].pattern;
         } else {
-            context.strokeStyle = cell.graphics.color;
+            context.strokeStyle = ThemeCache[Themes[currentTheme].foodBorderTexture.src].pattern;
         }
-        context.fill();
-        context.lineWidth = 5;
-        context.stroke();
+    } else {
+        context.strokeStyle = obj.graphics.color;
     }
-    if (debugAttractorRadius && cell.type === world.cellTypes.blackhole) {
-        var attrRadius = cell.radius + world.attractorAttractionDistance;
+    context.fill();
+    context.lineWidth = 5;
+    context.stroke();
+
+    if (debug && debugAttractorRadius && obj.type === world.objTypes.blackhole) {
+        var attrRadius = obj.radius + world.attractorAttractionDistance;
         context.beginPath();
-        context.arc(cell.position.x, cell.position.y, attrRadius, 0, 2 * Math.PI);
+        context.arc(obj.position.x, obj.position.y, attrRadius, 0, 2 * Math.PI);
         context.lineWidth = 5;
         context.strokeStyle = "purple";
         context.stroke();
@@ -190,7 +195,7 @@ function renderCell(cell, context) {
 }
 
 
-Graphics.newGraphics("loginCanvas", "2d", renderLoginCanvas, gDebug);
+Graphics.newGraphics("loginCanvas", "2d", renderLoginCanvas, debugGraphics);
 
 function renderLoginCanvasOnResize(canvas) {
     canvas.width = $("#loginContent").innerWidth();
@@ -266,7 +271,7 @@ function renderLoginCanvas(canvas, context) {
     this.QueueFrame();
 }
 
-Graphics.newGraphics("menuCanvas", "2d", renderMenuCanvas, gDebug);
+Graphics.newGraphics("menuCanvas", "2d", renderMenuCanvas, debugGraphics);
 function renderMenuCanvasOnResize(canvas) {
     canvas.width = $("#menuContent").innerWidth();
     canvas.height = $("#menuContent").innerHeight();
@@ -274,11 +279,16 @@ function renderMenuCanvasOnResize(canvas) {
 
 function updateBubbles() {
     var keepBubbles = [];
+    if ($("#mainMenu").is(":visible")) {
+        var targetWidth = $("#menuContent").innerWidth();
+    } else if ($("#login").is(":visible")) {
+        var targetWidth = $("#loginContent").innerWidth();
+    }
     for (i in bubbles) {
         var bubble = bubbles[i];
         bubble.x += bubble.fx * bubblesDelta;
         bubble.y -= bubble.fy * bubblesDelta;
-        if (bubble.x < $("#menuContent").innerWidth() + bubble.radius && bubble.y > -bubble.radius) {
+        if (bubble.x < targetWidth + bubble.radius && bubble.y > -bubble.radius) {
             keepBubbles.push(bubble);
         }
     }
