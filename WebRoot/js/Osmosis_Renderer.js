@@ -123,7 +123,7 @@ function renderObjs(objs, context) {
         } else {
             var zRad = (obj.radius * context.zoom);
             if (obj.position.x + zRad + canvasTranslation.x > 0 && obj.position.x - zRad + canvasTranslation.x < window.innerWidth / context.zoom) {
-                if (obj.position.y + canvasTranslation.y > 0 && obj.position.y + canvasTranslation.y < + window.innerHeight / context.zoom) {
+                if (obj.position.y + zRad + canvasTranslation.y > 0 && obj.position.y - zRad + canvasTranslation.y < + window.innerHeight / context.zoom) {
                     renderObj(obj, context);
                 } else if (debug && debugCulling) {
                     context.beginPath();

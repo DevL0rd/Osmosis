@@ -112,7 +112,7 @@ Graphics.newGraphics = function (canvasID, context, funcRenderFrame, dbg = false
 		}
 		if (ct < 1) {
 			ct += 0.005;
-		} else if (getDistance(gOBJ.context.lastCameraPos, gOBJ.context.cameraPos) > 30) {
+		} else if (getDistance(gOBJ.context.lastCameraPos, gOBJ.context.cameraPos) > 300) {
 			ct = 0;
 		}
 		gOBJ.context.lastCameraPos = gOBJ.context.cameraPos;

@@ -455,8 +455,7 @@ function splitobj(obj) {
         }
         nObj.angle = getAngle(nObj.position, obj.mousePos);
         nObj.speed = obj.speed;
-        nObj.force = obj.force;
-        addForce(nObj, nObj.angle, 500);
+        addForce(nObj, nObj.angle, world.spitSpeed + getVelocityOfVector(obj.force));
 
     }
 }
@@ -472,10 +471,9 @@ function spitobj(obj) {
     var newobjMass = obj.mass - world.spitMass;
     if (newobjMass >= world.minMass) {
         setMass(obj, newobjMass);
-        var spawnPos = findNewPoint(obj.position, obj.angle, obj.radius + Math.sqrt(world.spitMass * world.radiusScalar));
+        var spawnPos = findNewPoint(obj.position, obj.angle, obj.radius + Math.sqrt(world.spitMass * world.radiusScalar) + 10);
         var nObj = addObj(spawnPos.x, spawnPos.y, world.spitMass, "transparent", world.objTypes.food);
-        nObj.force = obj.force;
-        addForce(nObj, obj.angle, world.spitSpeed);
+        addForce(nObj, obj.angle, world.spitSpeed + getVelocityOfVector(obj.force));
     }
 }
 
@@ -838,7 +836,6 @@ engineEvents.on("collision", function (objPair) {
             if (smallObj.type === world.objTypes.blackhole) {
                 var massToTake = bigObj.mass * world.blackHoleMassSuckScalar;
                 takeMass(bigObj, massToTake);
-                addMass(smallObj, massToTake);
             } else {
                 //if obj is halfway over the target obj.
                 var eatDepth = bigObj.radius + objPair.objB.radius / 2;
