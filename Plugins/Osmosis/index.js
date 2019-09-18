@@ -90,8 +90,13 @@ function gameLoop() {
     }
     var elapsedTime = loopEnd(); //Track end time, and get elapsed time.
     //console.log(elapsedTime);
+
     if (isRunning) {
-        setTimeout(gameLoop, 20); //Do game loop again in 20ms.
+        if (isServer) {
+            setTimeout(gameLoop, 40);
+        } else {
+            setTimeout(gameLoop, 20); //Do game loop again in 20ms.
+        }
     }
 }
 
