@@ -43,7 +43,7 @@ var world = {
     foodSpawnAmount: 1,
     minFoodSize: 3,
     maxFoodSize: 7,
-    maxBlackHoleCount: 5,
+    maxBlackHoleCount: 2,
     blackHoleSpawnSize: 20,
     blackHoleMinSpawnSpeed: 30,
     blackHoleMaxSpawnSpeed: 50,
@@ -230,10 +230,9 @@ function detectAndResolveCollisions(obj) {
 
 function getCollidingObjects(objA) {
     var collidingobjs = [];
-    var keys = Object.keys(world.objs); //get all of the objs by key
     //Against all objs
-    for (iB in keys) {
-        var objB = world.objs[keys[iB]];
+    for (objId in world.objs) {
+        var objB = world.objs[objId];
         //compare non matching objs, and exclude already checked objs.
         if (objA.id != objB.id) { //don't check against self
             var collidingobjPair = detectCircleToCircleCollision(objA, objB); //check for collision between circles
