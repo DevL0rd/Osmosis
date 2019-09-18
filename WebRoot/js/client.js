@@ -40,6 +40,15 @@ socket.on("getThemes", function (newThemes) {
     loadThemeData();
 });
 
+socket.on("getScoreboard", function (newScoreBoard) {
+    scoreBoard = newScoreBoard;
+    $("#scores").html("");
+    for (i in scoreBoard) {
+        var entry = scoreBoard[i];
+        $("#scores").append("<span>" + entry.username + ": " + entry.score + "</span><br>");
+    }
+});
+
 function getThemes() {
     socket.emit("getThemes", Themes);
 }

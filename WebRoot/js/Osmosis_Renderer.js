@@ -3,8 +3,8 @@
 var debug = true;
 var debugGraphics = true;
 var debugCulling = false;
-var debugBlackholeFinder = true;
-var debugAttractorRadius = true;
+var debugBlackholeFinder = false;
+var debugAttractorRadius = false;
 Graphics.newGraphics("gameCanvas", "2d", renderFrame, debugGraphics);
 
 var currentTheme = "Osmosis"
@@ -57,26 +57,98 @@ function renderFrame(canvas, context) {
     if (!patternContext) {
         patternContext = context;
     }
+    if (playersObjs) {
+        var avgX = 0;
+        var avgY = 0;
+        var playerObjCount = 0;
+        var addedRadi = 0
+        for (objId in playersObjs) {
+            if (world.objs[objId]) {
+                playerObjCount++;
+                avgX += world.objs[objId].position.x
+                avgY += world.objs[objId].position.y
+                addedRadi += world.objs[objId].radius
+            }
+        }
+        if (playerObjCount) {
 
-    if (focusedObjId && world.objs[focusedObjId]) {
-        var nz = 1 - (world.objs[focusedObjId].mass / maxZoomMass);
-        context.zoomTo(nz);
-        canvasZoom = nz;
-        context.moveCameraTo(world.objs[focusedObjId].position);
+            var nz = 1 - (addedRadi / maxZoomMass);
+            context.zoomTo(nz);
+            canvasZoom = nz;
+            var camPos = { x: avgX / playerObjCount, y: avgY / playerObjCount }
+            context.moveCameraTo(camPos);
+        } else {
+            if (scoreBoard.length > 0) {
+                var avgX = 0;
+                var avgY = 0;
+                var playerObjCount = 0;
+                var addedRadi = 0
+                for (objId in scoreBoard[0].playerObjs) {
+                    if (world.objs[objId]) {
+                        playerObjCount++;
+                        avgX += world.objs[objId].position.x
+                        avgY += world.objs[objId].position.y
+                        addedRadi += world.objs[objId].radius
+                    }
+                }
+                if (playerObjCount) {
+                    var nz = 1 - (addedRadi / maxZoomMass);
+                    context.zoomTo(nz);
+                    canvasZoom = nz;
+                    var camPos = { x: avgX / playerObjCount, y: avgY / playerObjCount }
+                    context.moveCameraTo(camPos);
+                }
+            }
+        }
+
+        // if (focusedObjId && world.objs[focusedObjId]) {
+        //     // var nz = 1 - (addedRadi / maxZoomMass);
+        //     // context.zoomTo(nz);
+        //     // canvasZoom = nz;
+        //     context.moveCameraTo(world.objs[focusedObjId].position);
+        // }
     }
     canvasTranslation = context.translation;
     context.strokeStyle = "red";
     context.strokeRect(0, 0, world.width, world.height);
-
     renderObjs(world.objs, context);
-    //render forground player objs
     this.QueueFrame();
 }
-
 function renderObjs(objs, context) {
-
+    var playerCells = [];
     for (i in objs) {
         var obj = objs[i];
+        if (obj.type == world.objTypes.player) {
+            playerCells.push(obj);
+        } else {
+            var zRad = (obj.radius * context.zoom);
+            if (obj.position.x + zRad + canvasTranslation.x > 0 && obj.position.x - zRad + canvasTranslation.x < window.innerWidth / context.zoom) {
+                if (obj.position.y + canvasTranslation.y > 0 && obj.position.y + canvasTranslation.y < + window.innerHeight / context.zoom) {
+                    renderObj(obj, context);
+                } else if (debug && debugCulling) {
+                    context.beginPath();
+                    context.moveTo(obj.position.x, obj.position.y - zRad - 50);
+                    context.lineTo(obj.position.x, obj.position.y + zRad + 50);
+                    context.strokeStyle = "red";
+                    context.lineWidth = 5;
+                    context.stroke();
+                    context.closePath();
+                }
+            } else if (debug && debugCulling) {
+                context.beginPath();
+                context.moveTo(obj.position.x - zRad - 50, obj.position.y);
+                context.lineTo(obj.position.x + zRad + 50, obj.position.y);
+                context.strokeStyle = "red";
+                context.lineWidth = 5;
+                context.stroke();
+                context.closePath();
+            }
+        }
+
+    }
+    playerCells.sort((a, b) => (a.mass < b.mass) ? 1 : -1);
+    for (i in playerCells) {
+        var obj = playerCells[i];
         var zRad = (obj.radius * context.zoom);
         if (obj.position.x + zRad + canvasTranslation.x > 0 && obj.position.x - zRad + canvasTranslation.x < window.innerWidth / context.zoom) {
             if (obj.position.y + canvasTranslation.y > 0 && obj.position.y + canvasTranslation.y < + window.innerHeight / context.zoom) {
@@ -99,16 +171,14 @@ function renderObjs(objs, context) {
             context.stroke();
             context.closePath();
         }
-        if (focusedObjId && world.objs[focusedObjId]) {
-            if (debug && debugBlackholeFinder && obj.type === world.objTypes.blackhole) {
-                context.beginPath();
-                context.moveTo(world.objs[focusedObjId].position.x, world.objs[focusedObjId].position.y);
-                context.lineTo(obj.position.x, obj.position.y);
-                context.strokeStyle = "purple";
-                context.lineWidth = 5;
-                context.stroke();
-                context.closePath();
-            }
+        if (debug && debugBlackholeFinder && obj.type === world.objTypes.blackhole) {
+            context.beginPath();
+            context.moveTo(mousePosRelative.x, mousePosRelative.y);
+            context.lineTo(obj.position.x, obj.position.y);
+            context.strokeStyle = "purple";
+            context.lineWidth = 5;
+            context.stroke();
+            context.closePath();
         }
     }
 }

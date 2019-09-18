@@ -18,6 +18,7 @@ if (isServer) {
     var removedObjs = [];
     var foodCount = 0;
     var blackHoleCount = 0;
+    var slowTickInterval
 } else {
     //Client specific inits
     var pid;
@@ -26,7 +27,8 @@ if (isServer) {
     var isPlaying = true;
 
 }
-
+var isRunning = true;
+var scoreBoard = [];
 
 //***WORLD DATA STORAGE***
 var world = {
@@ -56,7 +58,8 @@ var world = {
     globalFriction: 0.8,
     forceCutOff: 0.05,
     objTypes: { food: 1, player: 2, blackhole: 3 },
-    attractorAttractionDistance: 300
+    attractorAttractionDistance: 300,
+    slowTickSpeed: 500
 };
 
 
@@ -87,7 +90,9 @@ function gameLoop() {
     }
     var elapsedTime = loopEnd(); //Track end time, and get elapsed time.
     //console.log(elapsedTime);
-    setTimeout(gameLoop, 20); //Do game loop again in 40ms.
+    if (isRunning) {
+        setTimeout(gameLoop, 20); //Do game loop again in 20ms.
+    }
 }
 
 
@@ -208,7 +213,7 @@ function detectAndResolveCollisions(obj) {
         for (i in objPairs) {
             var oPair = objPairs[i];
             // oPair => [objA, objB]
-            events.trigger("collision", oPair);
+            engineEvents.trigger("collision", oPair);
         }
     }
     var objWallCollisions = detectobjToWallCollision(obj); //Get any collisions with the wall
@@ -391,11 +396,8 @@ function removeobj(obj) {
         if (players[pid] && players[pid].objs[obj.id]) {
             //Update cell tracking for client
             var playerObjs = getAllPlayerObjs(pid);
-            var largestObj = getLargestobj(playerObjs);
-            players[pid].focusedObjId = largestObj.id;
             sendPlayerObjs(pid);
-            sendPlayerFocusedObj(pid);
-            if (!Object.keys(players[pid].objs).length) {//If no more cells exist for player, emit death event
+            if (!playerObjs) {//If no more cells exist for player, emit death event
                 players[pid].socket.emit("playerDied");
                 players[pid].socket.isPlaying = false;
             }
@@ -447,11 +449,15 @@ function splitobj(obj) {
             var nObj = addObj(spawnPos.x, spawnPos.y, newobjMass, obj.graphics.color, world.objTypes.player, players[obj.playerId].socket);
             nObj.mergeTime = Date.now() + (obj.mass * world.mergeDelayScalar);
             obj.mergeTime = Date.now() + (obj.mass * world.mergeDelayScalar);
+            sendPlayerObjs(obj.playerId);
         } else {
             var nObj = addObj(spawnPos.x, spawnPos.y, newobjMass, obj.graphics.color, world.objTypes.player);
         }
         nObj.angle = getAngle(nObj.position, obj.mousePos);
-        nObj.speed = obj.speed * 3;
+        nObj.speed = obj.speed;
+        nObj.force = obj.force;
+        addForce(nObj, nObj.angle, 500);
+
     }
 }
 
@@ -466,9 +472,10 @@ function spitobj(obj) {
     var newobjMass = obj.mass - world.spitMass;
     if (newobjMass >= world.minMass) {
         setMass(obj, newobjMass);
-        var spawnPos = findNewPoint(obj.position, obj.angle, obj.radius + world.spitMass);
+        var spawnPos = findNewPoint(obj.position, obj.angle, obj.radius + Math.sqrt(world.spitMass * world.radiusScalar));
         var nObj = addObj(spawnPos.x, spawnPos.y, world.spitMass, "transparent", world.objTypes.food);
-        setForce(nObj, obj.angle, world.spitSpeed);
+        nObj.force = obj.force;
+        addForce(nObj, obj.angle, world.spitSpeed);
     }
 }
 
@@ -646,6 +653,27 @@ function fillWorldWithFood() {
     }
     log("Food spawning complete!", false, "Osmosis");
 }
+function slowTick() {
+    calcNewScoreboard();
+}
+function calcNewScoreboard() {
+    scoreBoard = [];
+    for (pid in players) {
+        if (players[pid].socket.isPlaying) {
+            var totalMass = 0;
+            var pCells = []
+            for (objId in players[pid].objs) {
+                totalMass += world.objs[objId].mass;
+                pCells.push(world.objs[objId])
+            }
+            var followCell = getLargestobj(pCells) | { id: 0 };
+            scoreBoard.push({ username: players[pid].socket.username, playerObjs: players[pid].objs, score: Math.round(totalMass) });
+        }
+    }
+    scoreBoard.sort((a, b) => (a.score < b.score) ? 1 : -1);
+    io.emit("getScoreboard", scoreBoard);
+}
+
 function init(plugins, servSettings, events, serverio, serverLog, commands) {
     io = serverio;
     log = serverLog;
@@ -699,11 +727,13 @@ function init(plugins, servSettings, events, serverio, serverLog, commands) {
     fillWorldWithFood();
     gameLoop();
     log("Engine running!", false, "Osmosis");
+    slowTickInterval = setInterval(slowTick, world.slowTickSpeed);
     events.on("connection", function (socket) {
         socket.playerId = generateId();
         socket.isPlaying = false;
         socket.emit("getPlayerId", socket.playerId); //Tell client their player id
         socket.emit("worldData", world);
+
         socket.on("disconnect", function () {
             //make sure user is playing
             if (socket.playerId) {
@@ -739,15 +769,15 @@ function init(plugins, servSettings, events, serverio, serverLog, commands) {
             socket.emit("getThemes", Themes);
         });
 
-    });
-    commands.reloadThemes = {
+    }, "Osmosis");
+    commands.reloadthemes = {
         usage: "reloadThemes",
         help: "Reloads the themes for osmosis.",
         do: function (args, fullMessage) {
             loadThemes();
         }
     }
-    commands.reloadSkins = {
+    commands.reloadskins = {
         usage: "reloadSkins",
         help: "Reloads the skins for osmosis.",
         do: function (args, fullMessage) {
@@ -758,7 +788,7 @@ function init(plugins, servSettings, events, serverio, serverLog, commands) {
 
 
 
-var events = {
+var engineEvents = {
     "collision": [],
     "on": function (event, callback) {
         if (this[event] && event != "trigger" && event != "on" && event != "addEvent") {
@@ -786,7 +816,7 @@ var events = {
 };
 
 //***GAME LOGIC ***/
-events.on("collision", function (objPair) {
+engineEvents.on("collision", function (objPair) {
     //eat the smaller obj
     if (objPair.objA.type === world.objTypes.food && objPair.objB.type === world.objTypes.food) {
         resolveCircles(objPair.objA, objPair.objB); //resolve collision and transfer force
@@ -832,8 +862,21 @@ function eatCell(cellA, preyCell) {
     preyCell.mass = 0; //prevent double mass gain
     removeobj(preyCell);
 }
+function uninit(events, io, log, commands) {
+    isRunning = false;
+    //disconnect all sockets
+    var sockets = Object.values(io.of("/").connected);
+    for (var socketId in sockets) {
+        var socket = sockets[socketId];
+        socket.disconnect(true);
+    }
+    clearInterval(slowTickInterval);
+    delete commands.reloadThemes;
+    delete commands.reloadSkins;
+}
 if (isServer) {
     module.exports.init = init;
+    module.exports.uninit = uninit;
 } else {
     //***CLIENT CODE***/
     socket.on("worldData", function (worldData) {

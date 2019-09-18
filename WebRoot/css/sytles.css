@@ -235,3 +235,15 @@ a:active {
     top: 0;
     left: 0;
 }
+#scoreboard{
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 200px;
+    background-color: rgba(15, 15, 15, 0.6);
+    border-radius: 8px;
+    color: white;
+}
+#scores{
+    padding: 5px;
+}
