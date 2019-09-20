@@ -22,7 +22,6 @@ if (isServer) {
 } else {
     //Client specific inits
     var pid;
-    var focusedObjId;
     var playersObjs = {};
     var isPlaying = true;
 
@@ -33,8 +32,8 @@ var scoreBoard = [];
 //***WORLD DATA STORAGE***
 var world = {
     objs: {},
-    width: 15000,
-    height: 15000,
+    width: 25000,
+    height: 25000,
     playerSpawnSize: 120,
     minMass: 50,
     spitMass: 16,
@@ -196,9 +195,16 @@ function applyMassDecay(obj) { //Decay the mass of the obj
 function updatePosition(obj) { //Move obj according to force applied
     obj.position.x += obj.force.x * delta; //Apply force multiplied by delta to x. Keeps the movement stable in case of lagg.
     obj.position.y += obj.force.y * delta; //Apply force multiplied by delta to y.
-    detectAndResolveCollisions(obj); //Resolve any collisions as a result of the new position
     if (isServer) {
+        detectAndResolveCollisions(obj); //Resolve any collisions as a result of the new position
         updatedObjs.push(obj); //Flag objs as updated
+    } else {
+        var zRad = (obj.radius * canvasZoom);
+        if (obj.position.x + zRad + canvasTranslation.x > 0 && obj.position.x - zRad + canvasTranslation.x < window.innerWidth / canvasZoom) {
+            if (obj.position.y + canvasTranslation.y > 0 && obj.position.y + canvasTranslation.y < + window.innerHeight / canvasZoom) {
+                detectAndResolveCollisions(obj); //Resolve any collisions as a result of the new position
+            }
+        }
     }
 }
 
@@ -240,14 +246,16 @@ function getCollidingObjects(objA) {
         var objB = world.objs[objId];
         //compare non matching objs, and exclude already checked objs.
         if (objA.id != objB.id) { //don't check against self
-            var collidingobjPair = detectCircleToCircleCollision(objA, objB); //check for collision between circles
-            if (collidingobjPair) { //if collisions
-                objA.isColliding = true; //flag it as colliding
-                collidingobjs.push(collidingobjPair); //add to collision list
+            if (isServer) {
+                var collidingobjPair = detectCircleToCircleCollision(objA, objB); //check for collision between circles
+                if (collidingobjPair) { //if collisions
+                    objA.isColliding = true; //flag it as colliding
+                    collidingobjs.push(collidingobjPair); //add to collision list
+                }
             }
         }
     }
-    return collidingobjs; // return collision list
+    return collidingobjs;
 }
 function detectCircleToCircleCollision(objA, objB) { //check for collision between circles
     var radiusAdded = objA.radius + objB.radius;
@@ -322,8 +330,6 @@ function spawnPlayer(socket) { //Spawn and intialize player vars
     var spawnPos = getRandomSpawn(world.playerSpawnSize); //Get random spawn without collisions
     var playerObj = addObj(spawnPos.x, spawnPos.y, world.playerSpawnSize, "blue", world.objTypes.player, socket); //Spawn player obj, pass socket along for setup
     players[socket.playerId].socket = socket; //Track player cells in special cell tracking
-    players[socket.playerId].focusedObjId = playerObj.id; //Track player cells in special cell tracking
-    sendPlayerFocusedObj(playerObj.playerId); //Tell client the current focused Obj
     sendPlayerObjs(playerObj.playerId); //Tell client about about all player cells
     log("Player '" + socket.username + "' has spawned!", false, "Osmosis");
     socket.isPlaying = true; //Flag the socket as playing
@@ -331,9 +337,6 @@ function spawnPlayer(socket) { //Spawn and intialize player vars
 }
 function sendPlayerObjs(playerId) { //sends all the current player objs to player
     players[playerId].socket.emit("getPlayersObjIds", players[playerId].objs);
-}
-function sendPlayerFocusedObj(playerId) { //sends the current focused obj id to player
-    players[playerId].socket.emit("getFocusedObjId", players[playerId].focusedObjId);
 }
 
 function spawnRandomFoodobj() {
@@ -893,10 +896,6 @@ if (isServer) {
             var rObj = worldData.removedObjs[i];
             delete world.objs[rObj.id];
         }
-    });
-
-    socket.on("getFocusedObjId", function (objId) {
-        focusedObjId = objId;
     });
 
     socket.on("getPlayersObjIds", function (nPlayersObjs) {

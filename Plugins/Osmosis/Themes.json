@@ -1,5 +1,8 @@
 {
 	"Osmosis": {
+		"bgImage": {
+			"src": "/img/themes/Osmosis/bg.jpg"
+		},
 		"cellBorderTexture": {
 			"src": "/img/themes/Osmosis/seemlessRainbow.jpg"
 		},
