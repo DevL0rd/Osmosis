@@ -403,7 +403,6 @@ function removeobj(obj) {
             delete players[pid].objs[obj.id]; //Remove player from player list
             //Update cell tracking for client
             sendPlayerObjs(pid);
-            console.log(Object.keys(players[pid].objs).length)
             if (!Object.keys(players[pid].objs).length) {//If no more cells exist for player, emit death event
                 players[pid].socket.emit("playerDied");
                 players[pid].socket.isPlaying = false;

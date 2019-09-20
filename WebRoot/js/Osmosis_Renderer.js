@@ -421,7 +421,6 @@ function checkCollision(bubbleA, bubbleB) {
         return false;
     }
 }
-
 function renderLoginCanvas(canvas, context) {
     if ($("#login").is(":visible")) {
         bubbleLoopStart();
@@ -458,6 +457,7 @@ function updateBubbles() {
 }
 
 function drawBubbles(context) {
+    //context.filter = "blur(3px)";
     for (i in bubbles) {
         var bubble = bubbles[i];
         drawBubble(bubble, context);
