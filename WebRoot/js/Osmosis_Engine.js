@@ -42,7 +42,7 @@ var world = {
     foodSpawnAmount: 1,
     minFoodSize: 3,
     maxFoodSize: 7,
-    maxBlackHoleCount: 2,
+    maxBlackHoleCount: 3,
     blackHoleSpawnSize: 20,
     blackHoleMinSpawnSpeed: 30,
     blackHoleMaxSpawnSpeed: 50,
@@ -53,9 +53,9 @@ var world = {
     radiusScalar: 20,
     massDecay: 0.01,
     mergeDelayScalar: 60,
-    acceleration: 50,
+    acceleration: 25,
     globalFriction: 0.8,
-    forceCutOff: 0.05,
+    forceCutOff: 1,
     objTypes: { food: 1, player: 2, blackhole: 3 },
     attractorAttractionDistance: 300,
     slowTickSpeed: 500
@@ -155,11 +155,10 @@ function updateMergeTime(obj) { //keeps track of when the player obj can merge w
 }
 function calculateMouseMovement(obj) { //Player movement calculations based on mouse position
     dist = (obj.distToMouse - obj.radius); //Get distance to mouse from obj wall
-    obj.speed = Math.sqrt((obj.mass * 10) * world.speedDecreaseScalar);
     if (dist > 1) {
         //set the forces on the obj to keep it moving;
         applyGlobalFriction(obj);
-        var dSpeedScalar = (dist / 200);
+        var dSpeedScalar = (dist / 300);
         if (dSpeedScalar > 1.5) dSpeedScalar = 1.5;
         var acell = world.acceleration * dSpeedScalar;
     } else {
@@ -363,7 +362,6 @@ function addObj(x, y, mass, color, type = world.objTypes.food, socket) {
         x: 0,
         y: 0
     };
-    nObj.speed = 0;
     nObj.angle = 0;
     nObj.mergeTime = 0;
     nObj.isStatic = false;
@@ -374,7 +372,8 @@ function addObj(x, y, mass, color, type = world.objTypes.food, socket) {
     nObj.graphics = {
         color: color
     };
-    setMass(nObj, mass); //Set initial mass
+    nObj.radius = 1; //Initialize mass so it can animate to spawn size
+    setMass(nObj, mass); //Set initial spawn mass
     if (socket) { //Pass socket data to object like player id etc
         nObj.playerId = socket.playerId;
         if (!players[socket.playerId]) {
@@ -401,14 +400,14 @@ function removeobj(obj) {
     if (obj.type === world.objTypes.player) {
         var pid = obj.playerId;
         if (players[pid] && players[pid].objs[obj.id]) {
+            delete players[pid].objs[obj.id]; //Remove player from player list
             //Update cell tracking for client
-            var playerObjs = getAllPlayerObjs(pid);
             sendPlayerObjs(pid);
-            if (!playerObjs) {//If no more cells exist for player, emit death event
+            console.log(Object.keys(players[pid].objs).length)
+            if (!Object.keys(players[pid].objs).length) {//If no more cells exist for player, emit death event
                 players[pid].socket.emit("playerDied");
                 players[pid].socket.isPlaying = false;
             }
-            delete players[pid].objs[obj.id]; //Remove player from player list
         }
     } else if (obj.type === world.objTypes.blackhole) {
         blackHoleCount--; //Keep track of blackhole count
@@ -461,7 +460,6 @@ function splitobj(obj) {
             var nObj = addObj(spawnPos.x, spawnPos.y, newobjMass, obj.graphics.color, world.objTypes.player);
         }
         nObj.angle = getAngle(nObj.position, obj.mousePos);
-        nObj.speed = obj.speed;
         addForce(nObj, nObj.angle, world.spitSpeed + getVelocityOfVector(obj.force));
 
     }
@@ -493,14 +491,14 @@ function removePlayer(playerId) {
     delete players[playerId];
 }
 
-function playerOnMouseMove(playerId, mousePos) {
+function playerOnMouseMove(playerId, mPos) {
     var pobjs = getAllPlayerObjs(playerId);
     for (i in pobjs) {
         var obj = pobjs[i];
         //set the angle of each obj to follow the mouse
-        obj.angle = getAngle(obj.position, mousePos);
-        obj.mousePos = mousePos;
-        obj.distToMouse = getDistance(obj.position, mousePos);
+        obj.angle = getAngle(obj.position, mPos);
+        obj.mousePos = mPos;
+        obj.distToMouse = getDistance(obj.position, mPos);
     }
 }
 
@@ -600,7 +598,9 @@ function takeMass(obj, mass) {
 }
 function setMass(obj, mass) {
     obj.mass = mass;
+    obj.lastRadius = obj.radius;
     obj.radius = Math.sqrt(obj.mass * world.radiusScalar);
+
     if (isServer) {
         updatedObjs.push(obj);
     }
@@ -610,10 +610,10 @@ function applyGlobalFriction(obj) {
     obj.force.y -= (obj.force.y * world.globalFriction) * delta;
 }
 function applyForceCutoff(obj) {
-    if (obj.force.x < world.forceCutOff && obj.force.x > -world.forceCutOff) obj.force.x = 0;
-    if (obj.force.y < world.forceCutOff && obj.force.y > -world.forceCutOff) obj.force.y = 0;
+    if (getVelocityOfVector(obj.force) < world.forceCutOff) {
+        setForceVector(obj, { x: 0, y: 0 });
+    }
 }
-
 function isMoving(obj) {
     return (obj.force.x !== 0 || obj.force.y !== 0);
 }
@@ -910,9 +910,15 @@ if (isServer) {
     };
     var mousePosRelative
     function trackMouseMove(event) {
-        mousePos = {
-            x: event.clientX / canvasZoom,
-            y: event.clientY / canvasZoom
+        if (canvasTranslation && canvasZoom) {
+            mousePos = {
+                x: event.clientX / canvasZoom,
+                y: event.clientY / canvasZoom
+            }
+            mousePosRelative = {
+                x: mousePos.x - canvasTranslation.x,
+                y: mousePos.y - canvasTranslation.y
+            };
         }
     }
     window.onmousemove = trackMouseMove;
@@ -924,7 +930,7 @@ if (isServer) {
             };
             socket.emit("mouseMove", mousePosRelative);
         }
-    }, 20);
+    }, 40);
     var pressedKeys = {};
     window.onkeydown = keyDown;
     window.onkeyup = keyUp;

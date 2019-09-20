@@ -93,9 +93,7 @@ Graphics.newGraphics = function (canvasID, context, funcRenderFrame, dbg = false
 	};
 	gOBJ.context.moveCameraTo = function (pos) {
 		gOBJ.context.scale(gOBJ.context.zoom, gOBJ.context.zoom);
-		// var eX = EasingFunctions.easeInOutQuad(t) * pos.x;
 		var eX = gOBJ.context.lastCameraPos.x + (pos.x - gOBJ.context.lastCameraPos.x) * EasingFunctions.easeInOutQuad(ct);
-		// var eY = EasingFunctions.easeInOutQuad(t) * pos.y;
 		var eY = gOBJ.context.lastCameraPos.y + (pos.y - gOBJ.context.lastCameraPos.y) * EasingFunctions.easeInOutQuad(ct);
 		gOBJ.context.cameraPos = {
 			x: eX,

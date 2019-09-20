@@ -5,6 +5,8 @@ var debugGraphics = true;
 var debugCulling = false;
 var debugBlackholeFinder = true;
 var debugAttractorRadius = true;
+var debugPlayerFinder = true
+var debugForce = true;
 Graphics.newGraphics("gameCanvas", "2d", renderFrame, debugGraphics);
 
 var currentTheme = "Osmosis"
@@ -13,7 +15,7 @@ var canvasTranslation = {
     y: 0
 };
 var canvasZoom = 1;
-var maxZoomMass = 2500;
+var maxZoomMass = 25000;
 var context;
 var ThemeCache = {};
 var patternContext;
@@ -135,6 +137,15 @@ function renderFrame(canvas, context) {
             context.stroke();
         }
     }
+    //Make
+    if (debug && debugBlackholeFinder) {
+        context.beginPath();
+        context.arc(context.cameraPos.x, context.cameraPos.y, 150, 0, 2 * Math.PI);
+        context.lineWidth = 12;
+        context.strokeStyle = "rgba(128,0,128, 0.3)";
+        context.stroke();
+        context.closePath();
+    }
     context.strokeStyle = "red";
     context.strokeRect(0, 0, world.width, world.height);
     renderObjs(world.objs, context);
@@ -170,48 +181,85 @@ function renderObjs(objs, context) {
                 context.closePath();
             }
         }
-
-    }
-    playerCells.sort((a, b) => (a.mass < b.mass) ? 1 : -1);
-    for (i in playerCells) {
-        var obj = playerCells[i];
-        var zRad = (obj.radius * context.zoom);
-        if (obj.position.x + zRad + canvasTranslation.x > 0 && obj.position.x - zRad + canvasTranslation.x < window.innerWidth / context.zoom) {
-            if (obj.position.y + canvasTranslation.y > 0 && obj.position.y + canvasTranslation.y < + window.innerHeight / context.zoom) {
-                renderObj(obj, context);
+        playerCells.sort((a, b) => (a.mass < b.mass) ? 1 : -1);
+        for (i in playerCells) {
+            var obj = playerCells[i];
+            var zRad = (obj.radius * context.zoom);
+            if (obj.position.x + zRad + canvasTranslation.x > 0 && obj.position.x - zRad + canvasTranslation.x < window.innerWidth / context.zoom) {
+                if (obj.position.y + canvasTranslation.y > 0 && obj.position.y + canvasTranslation.y < + window.innerHeight / context.zoom) {
+                    renderObj(obj, context);
+                } else if (debug && debugCulling) {
+                    context.beginPath();
+                    context.moveTo(obj.position.x, obj.position.y - zRad - 50);
+                    context.lineTo(obj.position.x, obj.position.y + zRad + 50);
+                    context.strokeStyle = "red";
+                    context.lineWidth = 5;
+                    context.stroke();
+                    context.closePath();
+                }
             } else if (debug && debugCulling) {
                 context.beginPath();
-                context.moveTo(obj.position.x, obj.position.y - zRad - 50);
-                context.lineTo(obj.position.x, obj.position.y + zRad + 50);
+                context.moveTo(obj.position.x - zRad - 50, obj.position.y);
+                context.lineTo(obj.position.x + zRad + 50, obj.position.y);
                 context.strokeStyle = "red";
                 context.lineWidth = 5;
                 context.stroke();
                 context.closePath();
             }
-        } else if (debug && debugCulling) {
-            context.beginPath();
-            context.moveTo(obj.position.x - zRad - 50, obj.position.y);
-            context.lineTo(obj.position.x + zRad + 50, obj.position.y);
-            context.strokeStyle = "red";
-            context.lineWidth = 5;
-            context.stroke();
-            context.closePath();
         }
         if (debug && debugBlackholeFinder && obj.type === world.objTypes.blackhole) {
             context.beginPath();
-            console.log(mousePosRelative)
-            context.moveTo(mousePosRelative.x, mousePosRelative.y);
-            context.lineTo(obj.position.x, obj.position.y);
-            context.strokeStyle = "purple";
+
+            context.cameraPos.x, context.cameraPos.y
+            var lineAngle = getAngle(context.cameraPos, obj.position);
+            var newPoint1 = findNewPoint(context.cameraPos, lineAngle, 150 - 20);
+            var newPoint2 = findNewPoint(context.cameraPos, lineAngle, 150 + 20);
+            context.moveTo(newPoint1.x, newPoint1.y);
+            context.lineTo(newPoint2.x, newPoint2.y);
+            context.strokeStyle = "rgba(128,0,128, 0.3)";
             context.lineWidth = 5;
             context.stroke();
             context.closePath();
+        } else if (debug && debugPlayerFinder && obj.type === world.objTypes.player && obj.playerId != pid) {
+            context.beginPath();
+            var lineAngle = getAngle(context.cameraPos, obj.position);
+            var newPoint = findNewPoint(context.cameraPos, lineAngle, 150);
+            var newPoint1 = findNewPoint(context.cameraPos, lineAngle, 150 - 20);
+            var newPoint2 = findNewPoint(context.cameraPos, lineAngle, 150 + 20);
+            context.moveTo(newPoint1.x, newPoint1.y);
+            context.lineTo(newPoint2.x, newPoint2.y);
+            context.strokeStyle = "rgba(255,0,0, 0.5)";
+            context.lineWidth = 8;
+            context.stroke();
+            context.closePath();
+            context.beginPath();
+            context.arc(newPoint.x, newPoint.y, obj.mass * 0.01, 0, 2 * Math.PI);
+            context.fillStyle = "rgba(255,0,0, 0.5)";
+            context.lineWidth = 4;
+            context.fill();
+            context.closePath();
         }
+
     }
 }
 var skinCache = {};
 var textures = {}
+var cellsRT = {};
 function renderObj(obj, context) {
+    if (!cellsRT[obj.id]) cellsRT[obj.id] = { t: 0, lastRadius: 1 };
+    if (obj.radius != cellsRT[obj.id].lastRadius) {
+        var animRadius = cellsRT[obj.id].lastRadius + (obj.radius - cellsRT[obj.id].lastRadius) * EasingFunctions.easeInOutQuad(cellsRT[obj.id].t);
+        //MEMORY LEAK, BUT TESTING. FIX LATER
+        if (cellsRT[obj.id].t < 1) {
+            cellsRT[obj.id].t += 0.05;
+        } else {
+            cellsRT[obj.id].lastRadius = obj.radius;
+            cellsRT[obj.id].t = 0;
+        }
+    } else {
+        var animRadius = obj.radius
+    }
+
     //cache unloaded graphics and flag when they are loaded
     if (obj.graphics.texture) {
         if (!skinCache[obj.graphics.texture]) {
@@ -226,11 +274,10 @@ function renderObj(obj, context) {
             if (skinCache[obj.graphics.texture].isLoaded) {
                 context.save();
                 context.beginPath();
-                context.arc(obj.position.x, obj.position.y, obj.radius, 0, 2 * Math.PI);
+                context.arc(obj.position.x, obj.position.y, animRadius, 0, 2 * Math.PI);
                 context.clip();
-                var wh = obj.radius * 2;
-                var ro = obj.radius
-                context.drawImage(skinCache[obj.graphics.texture].texture, obj.position.x - ro, obj.position.y - ro, wh, wh);
+                var wh = animRadius * 2;
+                context.drawImage(skinCache[obj.graphics.texture].texture, obj.position.x - animRadius, obj.position.y - animRadius, wh, wh);
                 context.strokeStyle = obj.graphics.color;
                 context.lineWidth = 12;
                 context.fillStyle = "white";
@@ -241,16 +288,16 @@ function renderObj(obj, context) {
                 context.stroke();
                 context.closePath();
                 if (obj.type === world.objTypes.player) {
-                    context.font = "bold " + obj.radius * 0.5 + "px Verdana";
+                    context.font = "bold " + animRadius * 0.5 + "px Verdana";
                     var nameX = obj.position.x - context.measureText(obj.name).width / 2;
                     context.fillText(obj.name, nameX, obj.position.y);
                     context.fillStyle = "rgba(255, 255, 255, 0.6)";
                     context.fillText(obj.name, nameX, obj.position.y);
-                    context.font = "bold " + obj.radius * 0.25 + "px Verdana";
+                    context.font = "bold " + animRadius * 0.25 + "px Verdana";
                     var massRounded = Math.round(obj.mass);
                     var massTextMeasured = context.measureText(massRounded)
                     var massX = obj.position.x - massTextMeasured.width / 2;
-                    var massY = obj.position.y + obj.radius * 0.5
+                    var massY = obj.position.y + animRadius * 0.5
                     context.fillStyle = "white";
                     if (themeLoaded) {
                         context.fillStyle = ThemeCache[Themes[currentTheme].cellBorderTexture.src].pattern;
@@ -260,13 +307,31 @@ function renderObj(obj, context) {
                     context.fillText(massRounded, massX, massY);
                 }
                 context.restore();
+                if (debug && debugForce && isMoving(obj)) {
+                    context.beginPath();
+                    context.strokeStyle = "green";
+                    context.lineWidth = 10;
+                    context.moveTo(obj.position.x, obj.position.y);
+                    context.lineTo(obj.position.x + obj.force.x, obj.position.y + obj.force.y);
+                    context.stroke();
+                    context.closePath();
+                }
                 return;
             }
         }
     }
     //draw a basic obj
+    if (debug && debugForce && isMoving(obj)) {
+        context.beginPath();
+        context.strokeStyle = "green";
+        context.lineWidth = 10;
+        context.moveTo(obj.position.x, obj.position.y);
+        context.lineTo(obj.position.x + obj.force.x, obj.position.y + obj.force.y);
+        context.stroke();
+        context.closePath();
+    }
     context.beginPath();
-    context.arc(obj.position.x, obj.position.y, obj.radius, 0, 2 * Math.PI);
+    context.arc(obj.position.x, obj.position.y, animRadius, 0, 2 * Math.PI);
     context.fillStyle = obj.graphics.color;
     if (themeLoaded) {
         if (obj.type == world.objTypes.blackhole) {
@@ -282,7 +347,7 @@ function renderObj(obj, context) {
     context.stroke();
 
     if (debug && debugAttractorRadius && obj.type === world.objTypes.blackhole) {
-        var attrRadius = obj.radius + world.attractorAttractionDistance;
+        var attrRadius = animRadius + world.attractorAttractionDistance;
         context.beginPath();
         context.arc(obj.position.x, obj.position.y, attrRadius, 0, 2 * Math.PI);
         context.lineWidth = 5;
