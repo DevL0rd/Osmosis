@@ -1,6 +1,6 @@
 
 
-var debug = true;
+var debug = false;
 var debugGraphics = true;
 var debugCulling = false;
 var debugBlackholeFinder = true;
