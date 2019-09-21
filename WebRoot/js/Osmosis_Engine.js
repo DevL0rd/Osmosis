@@ -909,7 +909,6 @@ if (isServer) {
     };
     var mousePosRelative
     function trackMouseMove(event) {
-        console.log(event)
         if (canvasTranslation && canvasZoom) {
             mousePos = {
                 x: event.clientX / canvasZoom,
