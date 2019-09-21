@@ -103,17 +103,18 @@ function renderFrame(canvas, context) {
 
     }
     canvasTranslation = context.translation;
+    //Causes memory leak
     if (themeLoaded) {
-        bg_image = ThemeCache[Themes[currentTheme].bgImage.src].texture;
-        context.save();
-        var imgW = bg_image.width;
-        var imgH = bg_image.height;
-        for (var py = +.5 + ((canvasTranslation.y + world.height) * 0.4) % imgH; py < (world.height + imgH); py += imgH) {
-            for (var px = +.5 + ((canvasTranslation.x + world.width) * 0.4) % imgW; px < (world.width + imgW); px += imgW) {
-                context.drawImage(bg_image, px - imgW - 2, py - imgH - 2, imgW, imgH);
-            }
-        }
-        context.restore()
+        // bg_image = ThemeCache[Themes[currentTheme].bgImage.src].texture;
+        // context.save();
+        // var imgW = bg_image.width;
+        // var imgH = bg_image.height;
+        // for (var py = +.5 + (canvas.height * 0.4) % imgH; py < (canvas.height + imgH); py += imgH) {
+        //     for (var px = +.5 + (canvas.width * 0.4) % imgW; px < (canvas.width + imgW); px += imgW) {
+        //         context.drawImage(bg_image, px - imgW - 2, py - imgH - 2, imgW, imgH);
+        //     }
+        // }
+        // context.restore()
 
     }
     //grid
