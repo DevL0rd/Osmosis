@@ -8,14 +8,13 @@ var debugAttractorRadius = true;
 var debugPlayerFinder = true
 var debugForce = true;
 Graphics.newGraphics("gameCanvas", "2d", renderFrame, debugGraphics);
-
-var currentTheme = "Osmosis"
+var currentTheme = "Osmosis";
 var canvasTranslation = {
     x: 0,
     y: 0
 };
 var canvasZoom = 1;
-var maxZoomMass = 25000;
+var maxZoomMass = 15000;
 var context;
 var ThemeCache = {};
 var patternContext;
@@ -73,7 +72,6 @@ function renderFrame(canvas, context) {
             }
         }
         if (playerObjCount) {
-
             var nz = 1 - (addedMass / maxZoomMass);
             context.zoomTo(nz);
             canvasZoom = nz;
@@ -137,15 +135,6 @@ function renderFrame(canvas, context) {
             context.stroke();
         }
     }
-    //Make
-    if (debug && debugBlackholeFinder) {
-        context.beginPath();
-        context.arc(context.cameraPos.x, context.cameraPos.y, 150, 0, 2 * Math.PI);
-        context.lineWidth = 12;
-        context.strokeStyle = "rgba(128,0,128, 0.3)";
-        context.stroke();
-        context.closePath();
-    }
     context.strokeStyle = "red";
     context.strokeRect(0, 0, world.width, world.height);
     renderObjs(world.objs, context);
@@ -162,23 +151,11 @@ function renderObjs(objs, context) {
             if (obj.position.x + zRad + canvasTranslation.x > 0 && obj.position.x - zRad + canvasTranslation.x < window.innerWidth / context.zoom) {
                 if (obj.position.y + zRad + canvasTranslation.y > 0 && obj.position.y - zRad + canvasTranslation.y < window.innerHeight / context.zoom) {
                     renderObj(obj, context);
-                } else if (debug && debugCulling) {
-                    context.beginPath();
-                    context.moveTo(obj.position.x, obj.position.y - zRad - 50);
-                    context.lineTo(obj.position.x, obj.position.y + zRad + 50);
-                    context.strokeStyle = "red";
-                    context.lineWidth = 5;
-                    context.stroke();
-                    context.closePath();
+                } else {
+                    delete cellsRT[obj.id];
                 }
-            } else if (debug && debugCulling) {
-                context.beginPath();
-                context.moveTo(obj.position.x - zRad - 50, obj.position.y);
-                context.lineTo(obj.position.x + zRad + 50, obj.position.y);
-                context.strokeStyle = "red";
-                context.lineWidth = 5;
-                context.stroke();
-                context.closePath();
+            } else {
+                delete cellsRT[obj.id];
             }
         }
         playerCells.sort((a, b) => (a.mass < b.mass) ? 1 : -1);
@@ -188,23 +165,11 @@ function renderObjs(objs, context) {
             if (obj.position.x + zRad + canvasTranslation.x > 0 && obj.position.x - zRad + canvasTranslation.x < window.innerWidth / context.zoom) {
                 if (obj.position.y + canvasTranslation.y > 0 && obj.position.y + canvasTranslation.y < + window.innerHeight / context.zoom) {
                     renderObj(obj, context);
-                } else if (debug && debugCulling) {
-                    context.beginPath();
-                    context.moveTo(obj.position.x, obj.position.y - zRad - 50);
-                    context.lineTo(obj.position.x, obj.position.y + zRad + 50);
-                    context.strokeStyle = "red";
-                    context.lineWidth = 5;
-                    context.stroke();
-                    context.closePath();
+                } else {
+                    delete cellsRT[obj.id];
                 }
-            } else if (debug && debugCulling) {
-                context.beginPath();
-                context.moveTo(obj.position.x - zRad - 50, obj.position.y);
-                context.lineTo(obj.position.x + zRad + 50, obj.position.y);
-                context.strokeStyle = "red";
-                context.lineWidth = 5;
-                context.stroke();
-                context.closePath();
+            } else {
+                delete cellsRT[obj.id];
             }
         }
         if (debug && debugBlackholeFinder && obj.type === world.objTypes.blackhole) {
@@ -249,9 +214,8 @@ function renderObj(obj, context) {
     if (!cellsRT[obj.id]) cellsRT[obj.id] = { t: 0, lastRadius: 1 };
     if (obj.radius != cellsRT[obj.id].lastRadius) {
         var animRadius = cellsRT[obj.id].lastRadius + (obj.radius - cellsRT[obj.id].lastRadius) * EasingFunctions.easeInOutQuad(cellsRT[obj.id].t);
-        //MEMORY LEAK, BUT TESTING. FIX LATER
         if (cellsRT[obj.id].t < 1) {
-            cellsRT[obj.id].t += 0.05;
+            cellsRT[obj.id].t += 0.02;
         } else {
             cellsRT[obj.id].lastRadius = obj.radius;
             cellsRT[obj.id].t = 0;
