@@ -34,7 +34,7 @@ if (fs.existsSync(settingsPath)) {
     DB.save(settingsPath, settings);
 }
 var events = {};
-function init(plugins, mwsSettings, mwsEvents, io, mwsLog, commands) {
+function init(plugins, mwsSettings, mwsEvents, io, mwsLog, commands, workerIo) {
     serverCommands = commands;
     serverIo = io;
     serverPlugins = plugins;

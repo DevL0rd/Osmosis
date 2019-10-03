@@ -1,6 +1,7 @@
 {
 	"author": "Dustin Harris",
 	"enabled": true,
+	"loadWhenInWorkerMode": false,
 	"loadPriority": "-1",
 	"name": "Devlord Utils",
 	"varName": "DevlordBaseClient"
