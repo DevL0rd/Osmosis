@@ -62,3 +62,15 @@ function selectedSkin() {
     $("#mainMenuSkinImage").attr('src', this.src);
     socket.emit("setProfilePictureUrl", this.src);
 }
+$("#login").on('shown.bs.modal', function () {
+    $("#content").addClass("blur");
+});
+// $("#login").on('hidden.bs.modal', function () {
+//     $("#content").toggleClass("blur");
+// });
+$("#mainMenu").on('shown.bs.modal', function () {
+    $("#content").addClass("blur");
+});
+$("#mainMenu").on('hidden.bs.modal', function () {
+    $("#content").removeClass("blur");
+});

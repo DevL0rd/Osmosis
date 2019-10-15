@@ -19,6 +19,7 @@ if (isServer) {
     var foodCount = 0;
     var blackHoleCount = 0;
     var slowTickInterval
+    var workerIo;
 } else {
     //Client specific inits
     var pid;
@@ -70,32 +71,39 @@ function loopStart() { //Record loop start time and calc new delta
     now = Date.now();
     //Measure new delta
     delta = (now - then) / 1000;
-}
-function loopEnd() { //Record loop end time and get elapsed time
     then = now;
-    elapsedTime = Date.now() - then;
-    return elapsedTime;
 }
-
 
 
 //***GAME LOOP***
 function gameLoop() {
     loopStart(); //Track start time, and get new delta.
-    updateobjs(); //Update all objs
-    if (isServer) {
-        spawnTick(); //spawn food and blackholes etc.. when needed
-        sendUpdatesToClients(); //send updates to clients
-    }
-    var elapsedTime = loopEnd(); //Track end time, and get elapsed time.
-    //console.log(elapsedTime);
-
     if (isRunning) {
         if (isServer) {
-            setTimeout(gameLoop, 40);
+            updateobjs(); //Update all objs
+            spawnTick(); //spawn food and blackholes etc.. when needed
+            if (workerIo.workerCount) {
+                sendUpdatesToWorkers();
+                workerIo.doDistributedJob("getCollidingObjects", updatedObjs, workerIo.workerCount, function (results) {
+                    for (i in results) {
+                        var collisions = results[i]
+                        for (i2 in collisions) {
+                            var oPair = collisions[i2];
+                            engineEvents.trigger("collision", oPair);
+                        }
+                    }
+                    sendUpdatesToClients(); //send updates to clients
+                    setTimeout(gameLoop, 40);
+                });
+            } else {
+                sendUpdatesToClients(); //send updates to clients
+                setTimeout(gameLoop, 40);
+            }
         } else {
+            updateobjs(); //Update all objs
             setTimeout(gameLoop, 20); //Do game loop again in 20ms.
         }
+        //console.log(elapsedTime);
     }
 }
 
@@ -116,6 +124,9 @@ function spawnTick() { //spawn food and blackholes etc.. when needed
     if (blackHoleCount < world.maxBlackHoleCount) { //Spawn black hole if not enough of them are spawned
         spawnRandomBlackHole();
     }
+}
+function sendUpdatesToWorkers() { //Server side only
+    workerIo.io.emit("worldUpdate", { updatedObjs: updatedObjs, removedObjs: removedObjs });  //Send every client the updates
 }
 function sendUpdatesToClients() { //Server side only
     io.emit("worldUpdate", { updatedObjs: updatedObjs, removedObjs: removedObjs });  //Send every client the updates
@@ -192,12 +203,17 @@ function applyMassDecay(obj) { //Decay the mass of the obj
     }
 }
 function updatePosition(obj) { //Move obj according to force applied
-    obj.position.x += obj.force.x * delta; //Apply force multiplied by delta to x. Keeps the movement stable in case of lagg.
+    obj.position.x += obj.force.x * delta; //Apply force multiplied by delta to x. Keeps the movement stable in case of lag.
     obj.position.y += obj.force.y * delta; //Apply force multiplied by delta to y.
     if (isServer) {
-        detectAndResolveCollisions(obj); //Resolve any collisions as a result of the new position
+        if (!workerIo.workerCount) {
+            detectAndResolveCollisions(obj); //Resolve any collisions as a result of the new position
+        } else {
+            detectAndResolveWallCollisions(obj);
+        }
         updatedObjs.push(obj); //Flag objs as updated
     } else {
+        // Add collision detection to client after testing response times
         // var zRad = (obj.radius * canvasZoom);
         // if (obj.position.x + zRad + canvasTranslation.x > 0 && obj.position.x - zRad + canvasTranslation.x < window.innerWidth / canvasZoom) {
         //     if (obj.position.y + canvasTranslation.y > 0 && obj.position.y + canvasTranslation.y < + window.innerHeight / canvasZoom) {
@@ -226,6 +242,10 @@ function detectAndResolveCollisions(obj) {
             engineEvents.trigger("collision", oPair);
         }
     }
+    detectAndResolveWallCollisions(obj);
+}
+
+function detectAndResolveWallCollisions(obj) {
     var objWallCollisions = detectobjToWallCollision(obj); //Get any collisions with the wall
     //EG:
     //objWallCollisions => {
@@ -236,8 +256,6 @@ function detectAndResolveCollisions(obj) {
         handleobjToWallCollision(objWallCollisions);
     }
 }
-
-
 function getCollidingObjects(objA) {
     var collidingobjs = [];
     //Against all objs
@@ -397,26 +415,28 @@ function addObj(x, y, mass, color, type = world.objTypes.food, socket) {
 }
 
 function removeobj(obj) {
-    if (obj.type === world.objTypes.player) {
-        var pid = obj.playerId;
-        if (players[pid] && players[pid].objs[obj.id]) {
-            delete players[pid].objs[obj.id]; //Remove player from player list
-            //Update cell tracking for client
-            sendPlayerObjs(pid);
-            if (!Object.keys(players[pid].objs).length) {//If no more cells exist for player, emit death event
-                players[pid].socket.emit("playerDied");
-                players[pid].socket.isPlaying = false;
+    if (!workerIo.isWorker) {
+        if (obj.type === world.objTypes.player) {
+            var pid = obj.playerId;
+            if (players && players[pid] && players[pid].objs[obj.id]) {
+                delete players[pid].objs[obj.id]; //Remove player from player list
+                //Update cell tracking for client
+                sendPlayerObjs(pid);
+                if (!Object.keys(players[pid].objs).length) {//If no more cells exist for player, emit death event
+                    players[pid].socket.emit("playerDied");
+                    players[pid].socket.isPlaying = false;
+                }
             }
+        } else if (obj.type === world.objTypes.blackhole) {
+            blackHoleCount--; //Keep track of blackhole count
+        } else if (obj.type === world.objTypes.food) {
+            foodCount--; //Keep track of food count
         }
-    } else if (obj.type === world.objTypes.blackhole) {
-        blackHoleCount--; //Keep track of blackhole count
-    } else if (obj.type === world.objTypes.food) {
-        foodCount--; //Keep track of food count
     }
+    removedObjs.push(obj);
     if (attractors[obj.id]) {
         delete attractors[obj.id];
     }
-    removedObjs.push(obj);
     delete world.objs[obj.id];
 
 }
@@ -677,115 +697,158 @@ function calcNewScoreboard() {
     scoreBoard.sort((a, b) => (a.score < b.score) ? 1 : -1);
     io.emit("getScoreboard", scoreBoard);
 }
-
-function init(plugins, servSettings, events, serverio, serverLog, commands) {
+function init(plugins, servSettings, events, serverio, serverLog, commands, nworkerIo) {
     io = serverio;
     log = serverLog;
+    workerIo = nworkerIo;
     serverSettings = servSettings;
-    function loadThemes() {
-        log("Loading themes...", false, "Osmosis");
-        var ThemesPath = __dirname + "/Themes.json";
-        if (fs.existsSync(ThemesPath)) {
-            Themes = DB.load(ThemesPath);
-        } else {
-            Themes = {
-                "Osmosis": {
-                    "cellBorderTexture": {
-                        "src": "/img/themes/Osmosis/seemlessRainbow.jpg"
-                    },
-                    "foodBorderTexture": {
-                        "src": "/img/themes/Osmosis/seemlessWater.jpg"
-                    },
-                    "blackHoleBorderTexture": {
-                        "src": "/img/themes/Osmosis/seemlessSpace.jpg"
-                    },
-                    "bubbleBorderTexture": {
-                        "src": "/img/themes/Osmosis/seemlessRainbow.jpg"
+    if (workerIo.isWorker) {
+        events.on("doJob", function (job) {
+            if (job.jobName == "getCollidingObjects") {
+                var collisions = [];
+                for (i in job.data) {
+                    var obj = job.data[i];
+                    var objPairs = getCollidingObjects(obj); //Get any collisions with this obj. Comes in pairs
+                    // EG:
+                    // objPairs => [
+                    //     [objA, objB],
+                    //     [objA, objB2],
+                    //     [objA, objB3],
+                    //     etc...
+                    // ]
+                    if (objPairs.length) { //If there are colliding objs
+                        for (i in objPairs) {
+                            var oPair = objPairs[i];
+                            // oPair => [objA, objB]
+                            collisions.push(oPair);
+                        }
                     }
                 }
+                job.complete(collisions);
             }
-            DB.save(ThemesPath, Themes);
-            log("Themes file not found, generating dafults...", false, "Osmosis");
+        });
+        workerIo.socket.on("worldData", function (worldData) {
+            world = worldData;
+        });
+        workerIo.socket.on("worldUpdate", function (worldData) {
+            for (i in worldData.updatedObjs) {
+                var uObj = worldData.updatedObjs[i];
+                world.objs[uObj.id] = uObj;
+            }
+            for (i in worldData.removedObjs) {
+                var rObj = worldData.removedObjs[i];
+                delete world.objs[rObj.id];
+            }
+        });
+
+    } else {
+        function loadThemes() {
+            events.on("workerConnected", function (ws) {
+                ws.emit("worldData", world);
+            });
+            log("Loading themes...", false, "Osmosis");
+            var ThemesPath = __dirname + "/Themes.json";
+            if (fs.existsSync(ThemesPath)) {
+                Themes = DB.load(ThemesPath);
+            } else {
+                Themes = {
+                    "Osmosis": {
+                        "cellBorderTexture": {
+                            "src": "/img/themes/Osmosis/seemlessRainbow.jpg"
+                        },
+                        "foodBorderTexture": {
+                            "src": "/img/themes/Osmosis/seemlessWater.jpg"
+                        },
+                        "blackHoleBorderTexture": {
+                            "src": "/img/themes/Osmosis/seemlessSpace.jpg"
+                        },
+                        "bubbleBorderTexture": {
+                            "src": "/img/themes/Osmosis/seemlessRainbow.jpg"
+                        }
+                    }
+                }
+                DB.save(ThemesPath, Themes);
+                log("Themes file not found, generating dafults...", false, "Osmosis");
+            }
+            io.emit("getThemes", Themes);
+            log("Themes loaded!", false, "Osmosis");
         }
-        io.emit("getThemes", Themes);
-        log("Themes loaded!", false, "Osmosis");
-    }
-    function loadSkins() {
-        log("Loading skins...", false, "Osmosis");
-        skinUrls = [];
-        readdirp(serverSettings.webRoot + "/img/skins/", {
-            type: 'files',
-            fileFilter: ['*.png'],
-            directoryFilter: ['!.git'],
-            depth: 2
-        }).on('data', (fileInfo) => {
-            skinUrls.push("./img/skins/" + fileInfo.path);
-        }).on('end', () => {
-            io.emit("getSkins", skinUrls);
-            log("Skins loaded! Found " + skinUrls.length + " skins.", false, "Osmosis");
-        });
-    }
-    log("Starting game engine...", false, "Osmosis");
-    loadSkins();
-    loadThemes();
-    fillWorldWithFood();
-    gameLoop();
-    log("Engine running!", false, "Osmosis");
-    slowTickInterval = setInterval(slowTick, world.slowTickSpeed);
-    events.on("connection", function (socket) {
-        socket.playerId = generateId();
-        socket.isPlaying = false;
-        socket.emit("getPlayerId", socket.playerId); //Tell client their player id
-        socket.emit("worldData", world);
-
-        socket.on("disconnect", function () {
-            //make sure user is playing
-            if (socket.playerId) {
-                removePlayer(socket.playerId);
-            }
-        });
-        socket.on("mouseMove", function (mousePos) {
-            //validate input and make sure user is playing
-            if (socket.isPlaying && mousePos && mousePos.y && mousePos.x) {
-                playerOnMouseMove(socket.playerId, mousePos);
-            }
-        });
-        socket.on("split", function () {
-            //make sure user is playing
-            if (socket.isPlaying) {
-                playerOnSplit(socket.playerId);
-            }
-        });
-        socket.on("spit", function () {
-            //make sure user is playing
-            if (socket.isPlaying) {
-                playerOnSpit(socket.playerId);
-            }
-        });
-
-        socket.on("spawn", function () {
-            var playerobj = spawnPlayer(socket);
-        });
-        socket.on("getSkins", function () {
-            socket.emit("getSkins", skinUrls);
-        });
-        socket.on("getThemes", function () {
-            socket.emit("getThemes", Themes);
-        });
-
-    }, "Osmosis");
-    commands.reloadthemes = {
-        usage: "reloadThemes",
-        help: "Reloads the themes for osmosis.",
-        do: function (args, fullMessage) {
-            loadThemes();
+        function loadSkins() {
+            log("Loading skins...", false, "Osmosis");
+            skinUrls = [];
+            readdirp(serverSettings.webRoot + "/img/skins/", {
+                type: 'files',
+                fileFilter: ['*.png'],
+                directoryFilter: ['!.git'],
+                depth: 2
+            }).on('data', (fileInfo) => {
+                skinUrls.push("./img/skins/" + fileInfo.path);
+            }).on('end', () => {
+                io.emit("getSkins", skinUrls);
+                log("Skins loaded! Found " + skinUrls.length + " skins.", false, "Osmosis");
+            });
         }
-    }
-    commands.reloadskins = {
-        usage: "reloadSkins",
-        help: "Reloads the skins for osmosis.",
-        do: function (args, fullMessage) {
-            loadSkins();
+        log("Starting game engine...", false, "Osmosis");
+        loadSkins();
+        loadThemes();
+        fillWorldWithFood();
+        gameLoop();
+        log("Engine running!", false, "Osmosis");
+        slowTickInterval = setInterval(slowTick, world.slowTickSpeed);
+        events.on("connection", function (socket) {
+            socket.playerId = generateId();
+            socket.isPlaying = false;
+            socket.emit("getPlayerId", socket.playerId); //Tell client their player id
+            socket.emit("worldData", world);
+
+            socket.on("disconnect", function () {
+                //make sure user is playing
+                if (socket.playerId) {
+                    removePlayer(socket.playerId);
+                }
+            });
+            socket.on("mouseMove", function (mousePos) {
+                //validate input and make sure user is playing
+                if (socket.isPlaying && mousePos && mousePos.y && mousePos.x) {
+                    playerOnMouseMove(socket.playerId, mousePos);
+                }
+            });
+            socket.on("split", function () {
+                //make sure user is playing
+                if (socket.isPlaying) {
+                    playerOnSplit(socket.playerId);
+                }
+            });
+            socket.on("spit", function () {
+                //make sure user is playing
+                if (socket.isPlaying) {
+                    playerOnSpit(socket.playerId);
+                }
+            });
+
+            socket.on("spawn", function () {
+                var playerobj = spawnPlayer(socket);
+            });
+            socket.on("getSkins", function () {
+                socket.emit("getSkins", skinUrls);
+            });
+            socket.on("getThemes", function () {
+                socket.emit("getThemes", Themes);
+            });
+        }, "Osmosis");
+        commands.reloadthemes = {
+            usage: "reloadThemes",
+            help: "Reloads the themes for osmosis.",
+            do: function (args, fullMessage) {
+                loadThemes();
+            }
+        }
+        commands.reloadskins = {
+            usage: "reloadSkins",
+            help: "Reloads the skins for osmosis.",
+            do: function (args, fullMessage) {
+                loadSkins();
+            }
         }
     }
 }

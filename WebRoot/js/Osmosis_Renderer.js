@@ -1,13 +1,13 @@
 
 
-var debug = false;
+var debug = true;
 var debugGraphics = true;
 var debugCulling = false;
 var debugBlackholeFinder = true;
 var debugAttractorRadius = true;
 var debugPlayerFinder = true
-var debugForce = true;
-Graphics.newGraphics("gameCanvas", "2d", renderFrame, debugGraphics);
+var debugForce = false;
+Graphics.newGraphics("gameCanvas", "2d", renderFrame, debug && debugGraphics);
 var currentTheme = "Osmosis";
 var canvasTranslation = {
     x: 0,
@@ -135,6 +135,15 @@ function renderFrame(canvas, context) {
             context.lineTo(world.width, y);
             context.stroke();
         }
+    }
+    //player finder ring
+    if (debug && debugPlayerFinder) {
+        context.strokeStyle = "rgba(128,0,128, 0.6)";
+        context.lineWidth = 12;
+        context.beginPath();
+        context.arc(context.cameraPos.x, context.cameraPos.y, 150, 0, 2 * Math.PI);
+        context.stroke();
+        context.closePath();
     }
     context.strokeStyle = "red";
     context.strokeRect(0, 0, world.width, world.height);
@@ -322,7 +331,7 @@ function renderObj(obj, context) {
 }
 
 
-Graphics.newGraphics("loginCanvas", "2d", renderLoginCanvas, debugGraphics);
+Graphics.newGraphics("loginCanvas", "2d", renderLoginCanvas, debug && debugGraphics);
 
 function renderLoginCanvasOnResize(canvas) {
     canvas.width = $("#loginContent").innerWidth();
@@ -397,7 +406,7 @@ function renderLoginCanvas(canvas, context) {
     this.QueueFrame();
 }
 
-Graphics.newGraphics("menuCanvas", "2d", renderMenuCanvas, debugGraphics);
+Graphics.newGraphics("menuCanvas", "2d", renderMenuCanvas, debug && debugGraphics);
 function renderMenuCanvasOnResize(canvas) {
     canvas.width = $("#menuContent").innerWidth();
     canvas.height = $("#menuContent").innerHeight();

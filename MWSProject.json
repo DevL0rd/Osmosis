@@ -3,7 +3,6 @@
 	"Author": "DevL0rd",
 	"IP": "0.0.0.0",
 	"PORT": 80,
-	"workerPORT": 8080,
 	"timeout": 5000,
 	"maxHeadersCount": 20,
 	"maxPostSizeMB": 8,
@@ -37,8 +36,7 @@
 		"blockedPaths": [],
 		"blockedFiles": [],
 		"blockedFileNames": [],
-		"blockedFileExtensions": [],
-		"workerPassword": "$2a$08$UVK4i1mzFFEc1eqWmV/mRO1IsQkkojpJrRkMpDm4hA7SGLFWcrdS2"
+		"blockedFileExtensions": []
 	},
 	"logging": {
 		"enabled": true,
@@ -52,5 +50,11 @@
 		],
 		"errorNamespacePrintFilter": []
 	},
-	"projectPath": "../Osmosis"
+	"projectPath": "../Osmosis",
+	"clustering": {
+		"workerPORT": 8080,
+		"enabled": true,
+		"clusteredFileSync": false,
+		"workerPassword": "$2a$08$QS2m8v3lGwWelBzw2W60UelvKdYLUwjlCNP07.UNnT4r9SsxgcXGK"
+	}
 }
