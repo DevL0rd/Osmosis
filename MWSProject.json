@@ -1,6 +1,6 @@
 {
 	"Name": "Osmosis",
-	"Author": "DevL0rd",
+	"Author": "",
 	"IP": "0.0.0.0",
 	"PORT": 80,
 	"timeout": 5000,
@@ -12,6 +12,11 @@
 	],
 	"webRoot": "../Osmosis/WebRoot",
 	"pluginsPath": "../Osmosis/Plugins",
+	"upload": {
+		"enabled": true,
+		"limitMB": 0,
+		"path": "../Osmosis/Uploads"
+	},
 	"throttling": {
 		"videoBitRateKB": 51000,
 		"audioBitRateKB": 230,
@@ -19,6 +24,7 @@
 	},
 	"defaultHeaders": {
 		"Cache-Control": "max-age=0",
+		"X-Frame-Options": "SAMEORIGIN",
 		"X-XSS-Protection": "1; mode=block",
 		"X-Content-Type-Options": "nosniff"
 	},
@@ -50,11 +56,11 @@
 		],
 		"errorNamespacePrintFilter": []
 	},
-	"projectPath": "../Osmosis",
 	"clustering": {
 		"workerPORT": 8080,
 		"enabled": true,
 		"clusteredFileSync": false,
-		"workerPassword": "$2a$08$QS2m8v3lGwWelBzw2W60UelvKdYLUwjlCNP07.UNnT4r9SsxgcXGK"
-	}
+		"workerPassword": "$2a$08$7VT8LzXKqjIJBzZrDJJBs.ND/lw5iG1S8vEwKSlrw6pDehDEeqFSa"
+	},
+	"projectPath": "../Osmosis"
 }
