@@ -14,8 +14,7 @@
 	"pluginsPath": "../Osmosis/Plugins",
 	"upload": {
 		"enabled": true,
-		"limitMB": 0,
-		"path": "../Osmosis/Uploads"
+		"limitMB": 0
 	},
 	"throttling": {
 		"videoBitRateKB": 51000,
